@@ -60,7 +60,10 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   signed from secrets `ONTELEVIS_KEYSTORE_BASE64/_PASSWORD`, `ONTELEVIS_KEY_ALIAS/_PASSWORD`,
   versionName from the tag, versionCode = 100 + run number, checks with apksigner, publishes the
   single asset `ontelevis.apk` (stable name for `releases/latest/download`). Never add a second APK
-  asset. Never put the key or its passwords in the repo. Release APK ~10 MB (R8), tested on the
+  asset. Never put the key or its passwords in the repo. Release certificate (owner's key, kept in
+  ~/keystores/ontelevis-release.jks + secrets): SHA-256
+  `8e33258116c731a880b83980da857e9fa5e9994cce40b02c3f4066599140449b`; any release APK must show it
+  (`apksigner verify --print-certs`). First release: v1.0.0-beta.1 (pre-release, versionCode 101). Release APK ~10 MB (R8), tested on the
   emulator with a public iptv-org M3U (2026-11-08).
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
