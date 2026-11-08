@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feature_settings_title">Paramètres</string>
+    <string name="feature_settings_placeholder">Listes de lecture, guide, langue et contrôle parental.</string>
+</resources>

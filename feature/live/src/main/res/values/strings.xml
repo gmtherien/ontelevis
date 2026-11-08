@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feature_live_title">Live TV</string>
+    <string name="feature_live_placeholder">Your channels will appear here once a playlist is added.</string>
+</resources>

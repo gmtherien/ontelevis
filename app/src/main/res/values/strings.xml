@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Ontelevis</string>
+    <string name="home_tagline">Free, open-source IPTV player. Bring your own playlist: no content is included.</string>
+</resources>

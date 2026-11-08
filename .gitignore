@@ -1,0 +1,24 @@
+# Gradle / build
+.gradle/
+.kotlin/
+build/
+/captures
+.externalNativeBuild/
+.cxx/
+
+# Local machine
+local.properties
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+
+# Signing (never commit)
+*.jks
+*.keystore
+keystore.properties
+
+# Artifacts
+*.apk
+*.aab

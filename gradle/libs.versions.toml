@@ -1,0 +1,89 @@
+[versions]
+# Build
+agp = "9.5.1"
+kotlin = "2.4.21"
+ksp = "2.3.13"
+spotless = "8.11.0"
+ktlint = "1.8.0"
+
+# SDK levels
+compileSdk = "37"
+targetSdk = "36"
+# Current AndroidX (navigation 2.10, compose) requires API 24. Fire OS 6 = API 25, Fire OS 7 = API 28.
+minSdk = "24"
+
+# AndroidX
+androidx-core = "1.19.1"
+androidx-activity = "1.13.0"
+androidx-lifecycle = "2.11.0"
+androidx-navigation = "2.10.2"
+androidx-hilt = "1.4.0"
+androidx-work = "2.12.0"
+androidx-room = "2.8.5"
+compose-bom = "2026.09.00"
+tv-material = "1.1.0"
+# Media3 stays on 1.9.x until Jellyfin publishes an FFmpeg decoder for a newer Media3.
+media3 = "1.9.4"
+jellyfin-ffmpeg = "1.9.0+1"
+
+# Other
+hilt = "2.60.1"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.12.0"
+junit = "6.1.3"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "androidx-navigation" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
+androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "androidx-hilt" }
+androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "androidx-hilt" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "androidx-room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "androidx-room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "androidx-room" }
+
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+tv-material = { module = "androidx.tv:tv-material", version.ref = "tv-material" }
+
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
+jellyfin-media3-ffmpeg = { module = "org.jellyfin.media3:media3-ffmpeg-decoder", version.ref = "jellyfin-ffmpeg" }
+
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+# build-logic only
+android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+room = { id = "androidx.room", version.ref = "androidx-room" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+
+# Convention plugins (build-logic)
+ontelevis-android-application = { id = "ontelevis.android.application" }
+ontelevis-android-library = { id = "ontelevis.android.library" }
+ontelevis-android-compose = { id = "ontelevis.android.compose" }
+ontelevis-android-feature = { id = "ontelevis.android.feature" }
+ontelevis-hilt = { id = "ontelevis.hilt" }
+ontelevis-jvm-library = { id = "ontelevis.jvm.library" }
