@@ -11,9 +11,9 @@ Aucun contenu n'est fourni : vous ajoutez votre propre liste de lecture.*
 
 ## Status
 
-Early development. The project skeleton builds and starts; features are being built for V1:
-M3U and Xtream playlists, XMLTV guide, channel list with now/next, grid guide, favourites,
-channel zapping, Xtream catch-up, parental PIN, backup/restore, English and French.
+Early development, V1 features in place: M3U and Xtream playlists, XMLTV grid guide, movies and
+series (search, sort, resume), favourites and history, category order / hide / lock, channel
+zapping, Xtream catch-up, parental PIN, backup and restore, English and French.
 
 ## Build
 
@@ -38,10 +38,35 @@ Jellyfin FFmpeg audio decoder, Room, Hilt, WorkManager. Multi-module Gradle buil
 | `:core:data` | Room database and repositories |
 | `:core:player` | Media3 player setup |
 | `:core:designsystem` | Themes and shared UI |
-| `:feature:live`, `:feature:guide`, `:feature:settings` | Screens |
+| `:feature:live`, `:feature:vod`, `:feature:settings` | Screens |
 
 Shared Gradle configuration lives in `build-logic/` (convention plugins); versions in
 `gradle/libs.versions.toml`.
+
+## Releases
+
+Pushing a tag `v1.2.3` (or `v1.2.3-beta.1` for a pre-release) runs `.github/workflows/release.yml`:
+tests, signed release build (R8), signature check, and a GitHub release with `ontelevis.apk`.
+The newest stable APK is always at
+`https://github.com/gmtherien/ontelevis/releases/latest/download/ontelevis.apk`.
+
+The signing key is never in the repository. One-time setup by the maintainer:
+
+1. Create the key once, outside the project, and keep copies (password manager + external drive):
+   losing it means existing installs can never be updated.
+   ```bash
+   keytool -genkeypair -v -keystore ~/keystores/ontelevis-release.jks -alias ontelevis \
+     -keyalg RSA -keysize 4096 -validity 10000
+   ```
+2. Add four repository secrets (Settings › Secrets and variables › Actions):
+   `ONTELEVIS_KEYSTORE_BASE64` (output of `base64 -i ~/keystores/ontelevis-release.jks`),
+   `ONTELEVIS_KEYSTORE_PASSWORD`, `ONTELEVIS_KEY_ALIAS` (`ontelevis`), `ONTELEVIS_KEY_PASSWORD`.
+   With `gh`: `base64 -i ~/keystores/ontelevis-release.jks | gh secret set ONTELEVIS_KEYSTORE_BASE64`,
+   then `gh secret set ONTELEVIS_KEYSTORE_PASSWORD` (it asks for the value), and so on.
+3. Release: `git tag v1.0.0 && git push origin v1.0.0`.
+
+Local release builds use the same environment variables (`ONTELEVIS_KEYSTORE_FILE` = path of the
+`.jks`); without them `assembleRelease` gives an unsigned APK.
 
 ## Contributing
 

@@ -10,8 +10,24 @@ android {
 
     defaultConfig {
         applicationId = "app.ontelevis"
-        versionCode = 1
-        versionName = "0.1.0"
+        // The release workflow passes both from the tag and the run number (-PversionName / -PversionCode);
+        // local builds keep these.
+        versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+    }
+
+    // Release signing comes from environment variables only (GitHub Actions secrets): the key is never
+    // in the repository. Without them, release builds are left unsigned.
+    val keystoreFile = System.getenv("ONTELEVIS_KEYSTORE_FILE")
+    signingConfigs {
+        if (keystoreFile != null) {
+            create("release") {
+                storeFile = file(keystoreFile)
+                storePassword = System.getenv("ONTELEVIS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ONTELEVIS_KEY_ALIAS")
+                keyPassword = System.getenv("ONTELEVIS_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -19,6 +35,7 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

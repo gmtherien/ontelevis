@@ -946,7 +946,14 @@ private fun TvNoPlaylist(onAddPlaylist: () -> Unit) {
             Text(stringResource(R.string.live_add_playlist), style = OntTheme.type.button)
         }
     }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    // First start: the button gets the focus once it is laid out (asking earlier did nothing, and the
+    // focus then fell on the first shortcut of the panel).
+    LaunchedEffect(Unit) {
+        repeat(10) {
+            withFrameNanos { }
+            if (runCatching { focus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
 }
 
 @Composable

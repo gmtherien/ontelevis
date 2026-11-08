@@ -56,6 +56,12 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   if one is set. Files (`BackupFiles`): phone = system picker; TV (no picker, Android TV ships only
   `com.android.tv.frameworkpackagestubs`) = Download/Ontelevis via MediaStore (storage permission
   before Android 10). Android 10+ only lists files this install wrote (not after a reinstall).
+- Releases (owner chose GitHub Actions signing): tag `vX.Y.Z` -> `release.yml` builds `assembleRelease`
+  signed from secrets `ONTELEVIS_KEYSTORE_BASE64/_PASSWORD`, `ONTELEVIS_KEY_ALIAS/_PASSWORD`,
+  versionName from the tag, versionCode = 100 + run number, checks with apksigner, publishes the
+  single asset `ontelevis.apk` (stable name for `releases/latest/download`). Never add a second APK
+  asset. Never put the key or its passwords in the repo. Release APK ~10 MB (R8), tested on the
+  emulator with a public iptv-org M3U (2026-11-08).
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
   suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.

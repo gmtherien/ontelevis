@@ -1,0 +1,94 @@
+name: Release
+
+# Pushing a tag like v1.2.0 (or v1.2.0-beta.1 for a pre-release) builds the signed APK and publishes
+# it as ontelevis.apk in a GitHub release. The signing key only lives in the repository secrets:
+#   ONTELEVIS_KEYSTORE_BASE64  the .jks file, base64-encoded
+#   ONTELEVIS_KEYSTORE_PASSWORD, ONTELEVIS_KEY_ALIAS, ONTELEVIS_KEY_PASSWORD
+# The asset name never changes, so https://github.com/<owner>/<repo>/releases/latest/download/ontelevis.apk
+# always gives the newest stable version (for Downloader codes and the website).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Version from the tag
+        run: |
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag $TAG is not like v1.2.3 or v1.2.3-beta.1"; exit 1
+          fi
+          # Android needs a number that only goes up: the run number of this workflow, plus a margin.
+          echo "VERSION_NAME=$VERSION" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          if [[ "$VERSION" == *-* ]]; then echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"; fi
+
+      - name: Signing key from the secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ONTELEVIS_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret ONTELEVIS_KEYSTORE_BASE64 is missing (see README, Releases)"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "ONTELEVIS_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Checks
+        run: ./gradlew spotlessCheck test
+
+      - name: Build the signed APK
+        env:
+          ONTELEVIS_KEYSTORE_PASSWORD: ${{ secrets.ONTELEVIS_KEYSTORE_PASSWORD }}
+          ONTELEVIS_KEY_ALIAS: ${{ secrets.ONTELEVIS_KEY_ALIAS }}
+          ONTELEVIS_KEY_PASSWORD: ${{ secrets.ONTELEVIS_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
+          cp app/build/outputs/apk/release/app-release.apk ontelevis.apk
+
+      - name: Check the signature
+        run: |
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          # Fails on an unsigned APK (missing secrets would otherwise publish something not installable).
+          "$APKSIGNER" verify --print-certs ontelevis.apk | tee signature.txt
+          {
+            echo "### Ontelevis $VERSION_NAME (versionCode $VERSION_CODE)"
+            echo '```'
+            grep "SHA-256" signature.txt
+            echo "APK SHA-256: $(sha256sum ontelevis.apk | cut -d' ' -f1)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" ontelevis.apk \
+            --title "Ontelevis $VERSION_NAME" \
+            --generate-notes \
+            $PRERELEASE
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
