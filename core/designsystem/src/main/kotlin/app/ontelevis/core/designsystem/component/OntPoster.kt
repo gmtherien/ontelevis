@@ -101,7 +101,7 @@ fun OntPosterCard(
         Surface(
             onClick = onClick,
             onLongClick = onLongClick,
-            modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+            modifier = Modifier.touchClickable(onClick, onLongClick).fillMaxWidth().aspectRatio(2f / 3f),
             shape = ClickableSurfaceDefaults.shape(shape),
             colors = ClickableSurfaceDefaults.colors(containerColor = c.surface2, focusedContainerColor = c.surface2),
             border =
@@ -170,7 +170,7 @@ fun OntSecondaryButton(
     val c = OntTheme.colors
     Button(
         onClick = onClick,
-        modifier = modifier.height(OntDimens.ButtonHeight),
+        modifier = Modifier.touchClickable(onClick).then(modifier).height(OntDimens.ButtonHeight),
         shape = ButtonDefaults.shape(RoundedCornerShape(OntDimens.RadiusButton)),
         colors =
             ButtonDefaults.colors(

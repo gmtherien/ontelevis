@@ -81,6 +81,10 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   `ontelevis.hilt`, `ontelevis.jvm.library`. Versions only in `gradle/libs.versions.toml`.
 - build-logic compiles against AGP only; other plugins are applied by id (keeps it independent
   of their Kotlin metadata version). AGP 9 built-in Kotlin: no `kotlin-android` plugin.
+- Compose for TV `Surface` / `Button` ignore touch (they only react to OK on the focused item): every
+  clickable design-system component also carries `Modifier.touchClickable(onClick, onLongClick,
+  interaction)` (no-op on TV). Use it for any new tv-material clickable that phones can reach
+  (owner found the dead Xtream tab on a phone, 2026-11-08). Phone emulator: AVD `phone34` (Pixel 7).
 - TV UI = `androidx.tv:tv-material`; phone UI = Compose Material 3. Feature screens must work in both
   (`LocalIsTv`). TV text input goes through `OntTextField` (gated: read-only until OK).
 

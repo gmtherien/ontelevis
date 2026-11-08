@@ -48,6 +48,7 @@ import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntPrimaryButton
 import app.ontelevis.core.designsystem.component.OntSecondaryButton
 import app.ontelevis.core.designsystem.component.ProgressBar
+import app.ontelevis.core.designsystem.component.touchClickable
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntMotion
 import app.ontelevis.core.designsystem.theme.OntTheme
@@ -331,7 +332,12 @@ private fun EpisodeRow(
     val c = OntTheme.colors
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().widthIn(max = 860.dp).height(84.dp),
+        modifier =
+            Modifier
+                .touchClickable(onClick)
+                .fillMaxWidth()
+                .widthIn(max = 860.dp)
+                .height(84.dp),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusBlock)),
         colors =
             ClickableSurfaceDefaults.colors(

@@ -225,7 +225,7 @@ private fun PadKey(
     val c = OntTheme.colors
     Surface(
         onClick = onClick,
-        modifier = modifier.size(width = 72.dp, height = 48.dp),
+        modifier = Modifier.touchClickable(onClick).then(modifier).size(width = 72.dp, height = 48.dp),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusButton)),
         colors =
             ClickableSurfaceDefaults.colors(

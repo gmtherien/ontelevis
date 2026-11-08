@@ -177,7 +177,9 @@ fun OntListItem(
         onLongClick = onLongClick,
         interactionSource = interaction,
         modifier =
-            modifier
+            Modifier
+                .touchClickable(onClick, onLongClick, interaction)
+                .then(modifier)
                 .fillMaxWidth()
                 .height(OntDimens.ListItemHeight)
                 .alpha(if (dimmed && !focused) 0.5f else 1f),
@@ -255,7 +257,7 @@ fun OntPrimaryButton(
     val c = OntTheme.colors
     Button(
         onClick = onClick,
-        modifier = modifier.height(OntDimens.ButtonHeight),
+        modifier = Modifier.touchClickable(onClick).then(modifier).height(OntDimens.ButtonHeight),
         shape = ButtonDefaults.shape(RoundedCornerShape(OntDimens.RadiusButton)),
         colors =
             ButtonDefaults.colors(
@@ -282,7 +284,7 @@ fun OntIconButton(
     val c = OntTheme.colors
     Surface(
         onClick = onClick,
-        modifier = modifier.size(OntDimens.IconButton),
+        modifier = Modifier.touchClickable(onClick).then(modifier).size(OntDimens.IconButton),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusButton)),
         colors =
             ClickableSurfaceDefaults.colors(
@@ -346,7 +348,7 @@ fun EpgProgramBlock(
         onClick = onClick,
         onLongClick = onLongClick,
         interactionSource = interaction,
-        modifier = modifier.fillMaxHeight(),
+        modifier = Modifier.touchClickable(onClick, onLongClick, interaction).then(modifier).fillMaxHeight(),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusBlock)),
         colors =
             ClickableSurfaceDefaults.colors(
