@@ -65,6 +65,15 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   `8e33258116c731a880b83980da857e9fa5e9994cce40b02c3f4066599140449b`; any release APK must show it
   (`apksigner verify --print-certs`). First release: v1.0.0-beta.1 (pre-release, versionCode 101). Release APK ~10 MB (R8), tested on the
   emulator with a public iptv-org M3U (2026-11-08).
+- In-app updates (`AppUpdater`, `UpdateCenter`, `UpdatePrompt` at the root of TvApp / PhoneApp):
+  GitHub API `repos/gmtherien/ontelevis/releases`, asset `ontelevis.apk` (must match `release.yml`).
+  Stable only unless Settings "Receive beta versions"; owner chose "ask at every start"
+  (Update now / Later), never over a full-screen player. Download to cache/updates, size and free
+  space checked, then `getPackageArchiveInfo`: same package, higher versionCode, same signing
+  certificate (else deleted, "not a valid update"); FileProvider `${applicationId}.updates` +
+  `REQUEST_INSTALL_PACKAGES`. Debug builds never check. `AppVersion` orders tags semver-style.
+  Tested 2026-11-08: prompt, check, download, signature rejection (throwaway key); a real install
+  needs two releases signed with the owner's key.
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
   suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.

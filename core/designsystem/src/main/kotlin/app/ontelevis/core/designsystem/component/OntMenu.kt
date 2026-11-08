@@ -45,6 +45,8 @@ fun OntMenu(
     title: String,
     options: List<OntMenuOption>,
     onDismiss: () -> Unit,
+    /** False when a choice leads to another state of the same dialog (it closes it itself). */
+    dismissOnSelect: Boolean = true,
 ) {
     val c = OntTheme.colors
     val first = remember { FocusRequester() }
@@ -69,7 +71,7 @@ fun OntMenu(
                 style = OntTheme.type.itemStrong,
                 color = c.textPrimary,
                 // Room for a question (confirmations), not just a title.
-                maxLines = 5,
+                maxLines = 10,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 10.dp),
             )
@@ -79,7 +81,7 @@ fun OntMenu(
                     text = option.label,
                     selected = false,
                     onClick = {
-                        onDismiss()
+                        if (dismissOnSelect) onDismiss()
                         option.onClick()
                     },
                     modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,

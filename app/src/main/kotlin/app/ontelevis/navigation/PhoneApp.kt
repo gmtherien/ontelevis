@@ -22,6 +22,7 @@ import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AddPlaylistScreen
 import app.ontelevis.feature.settings.SettingsScreen
+import app.ontelevis.feature.settings.UpdatePrompt
 import app.ontelevis.feature.vod.MoviesRoute
 import app.ontelevis.feature.vod.SeriesListRoute
 import app.ontelevis.feature.vod.VodPlayerRoute
@@ -84,4 +85,10 @@ fun PhoneApp() {
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
         }
     }
+    // New version on GitHub: asked at each start, never over a full-screen player.
+    UpdatePrompt(
+        allowed =
+            current != null && current.hasRoute(PlayerRoute::class).not() &&
+                current.hasRoute(VodPlayerRoute::class).not(),
+    )
 }

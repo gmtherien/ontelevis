@@ -52,6 +52,7 @@ class SettingsViewModel
         private val parental: ParentalControl,
         private val backups: BackupManager,
         val backupFiles: BackupFiles,
+        val updates: UpdateCenter,
     ) : ViewModel() {
         /** A backup read and waiting for the user's confirmation. */
         data class PendingRestore(

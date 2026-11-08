@@ -50,6 +50,10 @@ tests, signed release build (R8), signature check, and a GitHub release with `on
 The newest stable APK is always at
 `https://github.com/gmtherien/ontelevis/releases/latest/download/ontelevis.apk`.
 
+Installed release builds check GitHub at each start and offer the newest release (stable only,
+unless "Receive beta versions" is on in Settings); they download it, check it is signed with the
+same key, and open the system installer. Development builds never update.
+
 The signing key is never in the repository. One-time setup by the maintainer:
 
 1. Create the key once, outside the project, and keep copies (password manager + external drive):

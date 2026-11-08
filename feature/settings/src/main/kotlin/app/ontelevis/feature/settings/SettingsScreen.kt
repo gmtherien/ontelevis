@@ -77,6 +77,7 @@ fun SettingsScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val hasPin by viewModel.hasPin.collectAsStateWithLifecycle()
+    val betas by viewModel.updates.betas.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pinStep by remember { mutableStateOf(PinStep.NONE) }
     val pendingRestore by viewModel.pendingRestore.collectAsStateWithLifecycle()
@@ -297,6 +298,40 @@ fun SettingsScreen(
                     selected = false,
                     onClick = { if (hasPin) restorePinCheck = true else startRestore() },
                 )
+            }
+            item {
+                SectionLabel(
+                    stringResource(R.string.settings_app),
+                    Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                Text(
+                    stringResource(
+                        if (viewModel.updates.canUpdate) R.string.settings_version else R.string.settings_version_dev,
+                        viewModel.updates.versionName,
+                    ),
+                    style = OntTheme.type.meta,
+                    color = c.textMuted,
+                    modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
+                )
+            }
+            if (viewModel.updates.canUpdate) {
+                item {
+                    OntListItem(
+                        text = stringResource(R.string.settings_check_updates),
+                        selected = false,
+                        onClick = viewModel.updates::manualCheck,
+                    )
+                }
+                item {
+                    OntListItem(
+                        text = stringResource(R.string.settings_betas),
+                        selected = false,
+                        onClick = { viewModel.updates.setBetas(!betas) },
+                        trailingTag = stringResource(if (betas) R.string.settings_on else R.string.settings_off),
+                    )
+                }
             }
             item {
                 SectionLabel(

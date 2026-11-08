@@ -29,6 +29,7 @@ import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AddPlaylistScreen
 import app.ontelevis.feature.settings.SettingsScreen
+import app.ontelevis.feature.settings.UpdatePrompt
 import app.ontelevis.feature.vod.MovieRoute
 import app.ontelevis.feature.vod.MovieScreen
 import app.ontelevis.feature.vod.MoviesRoute
@@ -166,6 +167,8 @@ fun TvApp() {
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
         }
     }
+    // New version on GitHub: asked at each start, never over a full-screen player.
+    UpdatePrompt(allowed = destination != null && !destination.isPlayer())
 }
 
 /** Movies, series, their pages and the VOD player (shared by the TV and phone shells). */
