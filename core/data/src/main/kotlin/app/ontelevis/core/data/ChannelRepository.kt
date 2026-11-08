@@ -6,10 +6,14 @@ import app.ontelevis.core.data.db.ChannelGroupDao
 import app.ontelevis.core.data.db.GroupPrefEntity
 import app.ontelevis.core.data.db.HistoryEntity
 import app.ontelevis.core.data.db.LibraryDao
+import app.ontelevis.core.data.db.PlaylistDao
+import app.ontelevis.core.data.importer.PlaylistImporter
 import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.ChannelGroup
+import app.ontelevis.core.parser.xtream.XtreamUrls
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 import javax.inject.Inject
 
 interface ChannelRepository {
@@ -46,6 +50,16 @@ interface ChannelRepository {
 
     suspend fun channel(id: String): Channel?
 
+    /**
+     * Link to the recording of [channel] between [startMillis] and [stopMillis] (catch-up), or null
+     * when the channel has none (only Xtream panels for now).
+     */
+    suspend fun catchupUrl(
+        channel: Channel,
+        startMillis: Long,
+        stopMillis: Long,
+    ): String?
+
     /** Channels of the category [channel] belongs to, in provider order (for CH+ / CH-). */
     suspend fun channelsAround(channel: Channel): List<Channel>
 }
@@ -56,6 +70,7 @@ internal class RoomChannelRepository
         private val groupDao: ChannelGroupDao,
         private val channelDao: ChannelDao,
         private val libraryDao: LibraryDao,
+        private val playlistDao: PlaylistDao,
     ) : ChannelRepository {
         override fun observeGroups(): Flow<List<ChannelGroup>> =
             groupDao.observeAll().map { rows ->
@@ -120,6 +135,24 @@ internal class RoomChannelRepository
             channelDao.observeInGroup(group.playlistId, group.name).map { rows -> rows.map { it.toModel() } }
 
         override suspend fun channel(id: String): Channel? = channelDao.get(id)?.toModel()
+
+        override suspend fun catchupUrl(
+            channel: Channel,
+            startMillis: Long,
+            stopMillis: Long,
+        ): String? {
+            if (channel.catchupDays <= 0) return null
+            val playlist = playlistDao.get(channel.playlistId) ?: return null
+            if (playlist.kind != PlaylistImporter.KIND_XTREAM) return null
+            val urls = XtreamUrls(playlist.url, playlist.username.orEmpty(), playlist.password.orEmpty())
+            val minutes = ((stopMillis - startMillis + 59_999) / 60_000).toInt().coerceAtLeast(1)
+            return urls.timeshift(
+                streamId = channel.rawId,
+                start = Instant.ofEpochMilli(startMillis),
+                durationMinutes = minutes,
+                zone = XtreamUrls.zoneOf(playlist.serverTimezone),
+            )
+        }
 
         override suspend fun channelsAround(channel: Channel): List<Channel> =
             channelDao.inGroup(channel.playlistId, channel.group).map { it.toModel() }

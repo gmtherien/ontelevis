@@ -135,6 +135,12 @@ class LiveViewModel
         private val _window = MutableStateFlow(EpgWindow.around(Instant.now(), duration = GUIDE_SPAN))
         val window: StateFlow<EpgWindow> = _window.asStateFlow()
 
+        /** Last programme replayed from the guide (channel id, start): Back from the recording lands on it. */
+        var lastReplay: Pair<String, Long>? = null
+
+        // Start of the window around "now"; the window itself may reach further back (catch-up).
+        private var anchor: Instant = _window.value.start
+
         // Changes when a guide finished downloading: programmes are read again.
         private val epgStamp =
             playlistRepository
@@ -163,8 +169,12 @@ class LiveViewModel
         init {
             viewModelScope.launch {
                 now.collect { now ->
-                    if (now.isAfter(_window.value.start.plus(REANCHOR_AFTER))) {
-                        _window.value = EpgWindow.around(now, duration = GUIDE_SPAN)
+                    if (now.isAfter(anchor.plus(REANCHOR_AFTER))) {
+                        val around = EpgWindow.around(now, duration = GUIDE_SPAN)
+                        // Hours added into the past for catch-up stay; the end follows "now".
+                        val start = if (_window.value.start.isBefore(anchor)) _window.value.start else around.start
+                        anchor = around.start
+                        _window.value = EpgWindow(start, Duration.between(start, around.end))
                     }
                 }
             }
@@ -185,6 +195,20 @@ class LiveViewModel
                     .distinctUntilChangedBy { it.id }
                     .collect { channelRepository.recordWatched(it) }
             }
+        }
+
+        /**
+         * Catch-up: the guide reaches [PAST_STEP] further back, no further than [channel]'s archive.
+         * Called when the focus gets near the start of the window on a channel with catch-up.
+         */
+        fun extendIntoPast(channel: Channel) {
+            val days = channel.catchupDays.coerceIn(0, MAX_CATCHUP_DAYS)
+            if (days == 0) return
+            val earliest = slotFloor(Instant.now().minus(Duration.ofDays(days.toLong())))
+            val current = _window.value
+            if (!current.start.isAfter(earliest)) return
+            val start = maxOf(earliest, current.start.minus(PAST_STEP))
+            _window.value = EpgWindow(start, Duration.between(start, current.end))
         }
 
         fun select(group: ChannelGroup) {
@@ -276,6 +300,17 @@ private val GUIDE_SPAN: Duration = Duration.ofHours(8)
 
 /** Re-anchor the guide window on "now" when its start is this far behind. */
 private val REANCHOR_AFTER: Duration = Duration.ofMinutes(90)
+
+/** How much the guide reaches further back each time the focus nears its start (catch-up). */
+private val PAST_STEP: Duration = Duration.ofHours(6)
+
+/** Catch-up archives longer than this are not followed back (same cap as the guide import). */
+private const val MAX_CATCHUP_DAYS = 7
+
+private fun slotFloor(t: Instant): Instant {
+    val slot = 30 * 60 * 1000L
+    return Instant.ofEpochMilli(Math.floorDiv(t.toEpochMilli(), slot) * slot)
+}
 
 /** Emits the time now, then at the start of every minute. */
 internal fun minuteTicker(): Flow<Instant> =

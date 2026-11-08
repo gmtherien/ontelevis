@@ -21,6 +21,13 @@ import java.io.InputStream
 @Serializable
 data class XtreamAccountResponse(
     @SerialName("user_info") val userInfo: XtreamUserInfo? = null,
+    @SerialName("server_info") val serverInfo: XtreamServerInfo? = null,
+)
+
+@Serializable
+data class XtreamServerInfo(
+    /** Time zone of the panel (e.g. "UTC", "Europe/Paris"): catch-up start times are written in it. */
+    @Serializable(FlexibleString::class) val timezone: String? = null,
 )
 
 @Serializable

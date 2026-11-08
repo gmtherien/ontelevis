@@ -151,7 +151,7 @@ fun VodPlayerScreen(
         viewModel.exoPlayer?.let { player ->
             ContentFrame(player = player, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         }
-        StatusText(playback, Modifier.align(Alignment.Center))
+        StatusText(playback, ui.catchup, Modifier.align(Alignment.Center))
         AnimatedVisibility(
             visible = overlayVisible,
             enter = fadeIn(),
@@ -166,6 +166,7 @@ fun VodPlayerScreen(
 @Composable
 private fun StatusText(
     playback: VodState,
+    catchup: Boolean,
     modifier: Modifier,
 ) {
     val c = OntTheme.colors
@@ -178,10 +179,21 @@ private fun StatusText(
             VodState.Status.ERROR -> {
                 stringResource(
                     when (playback.error) {
-                        PlaybackError.NOT_FOUND -> R.string.vod_error_not_found
-                        PlaybackError.UNSUPPORTED -> R.string.vod_error_unsupported
-                        PlaybackError.DEVICE_CANNOT_DECODE -> R.string.vod_error_device
-                        else -> R.string.vod_error_unreachable
+                        PlaybackError.NOT_FOUND -> {
+                            if (catchup) R.string.vod_error_catchup_missing else R.string.vod_error_not_found
+                        }
+
+                        PlaybackError.UNSUPPORTED -> {
+                            R.string.vod_error_unsupported
+                        }
+
+                        PlaybackError.DEVICE_CANNOT_DECODE -> {
+                            R.string.vod_error_device
+                        }
+
+                        else -> {
+                            R.string.vod_error_unreachable
+                        }
                     },
                 )
             }

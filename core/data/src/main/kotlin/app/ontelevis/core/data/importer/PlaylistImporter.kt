@@ -5,6 +5,7 @@ import app.ontelevis.core.data.db.ChannelEntity
 import app.ontelevis.core.data.db.ChannelGroupDao
 import app.ontelevis.core.data.db.ChannelGroupEntity
 import app.ontelevis.core.data.db.OntelevisDatabase
+import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.PlaylistEntity
 import app.ontelevis.core.data.db.VodDao
 import app.ontelevis.core.data.network.HttpSource
@@ -55,6 +56,7 @@ class PlaylistImporter
         private val channelDao: ChannelDao,
         private val groupDao: ChannelGroupDao,
         private val vodDao: VodDao,
+        private val playlistDao: PlaylistDao,
     ) {
         /** Channels stored, and the guide link an M3U header announced (null for Xtream). */
         data class Result(
@@ -115,6 +117,7 @@ class PlaylistImporter
             val urls = XtreamUrls(playlist.url, playlist.username.orEmpty(), playlist.password.orEmpty())
             val account = http.open(urls.playerApi()) { XtreamJson.decodeAccount(it) }
             if (account.userInfo?.auth != 1) throw RefreshException(RefreshError.AUTH)
+            playlistDao.setServerTimezone(playlist.id, account.serverInfo?.timezone)
             val categories = http.open(urls.playerApi("get_live_categories")) { XtreamJson.decodeCategories(it) }
             return http.open(urls.playerApi("get_live_streams")) { stream ->
                 replaceChannels(

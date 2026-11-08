@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.R
@@ -304,6 +306,8 @@ fun EpgProgramBlock(
     playing: Boolean = false,
     progress: Float = 0f,
     onLongClick: (() -> Unit)? = null,
+    /** A past programme that can be replayed (catch-up): rewind mark, brighter title. */
+    replayable: Boolean = false,
 ) {
     val c = OntTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -311,9 +315,21 @@ fun EpgProgramBlock(
 
     val (bg, titleColor, subColor) =
         when (state) {
-            ProgramState.PAST -> Triple(c.programPast, c.textTertiary, c.textTertiary)
-            ProgramState.CURRENT -> Triple(c.surface3, c.textPrimary, c.textMuted)
-            ProgramState.UPCOMING -> Triple(c.programUpcoming, c.textSecondary, c.textTertiary)
+            ProgramState.PAST -> {
+                if (replayable) {
+                    Triple(c.programPast, c.textSecondary, c.textTertiary)
+                } else {
+                    Triple(c.programPast, c.textTertiary, c.textTertiary)
+                }
+            }
+
+            ProgramState.CURRENT -> {
+                Triple(c.surface3, c.textPrimary, c.textMuted)
+            }
+
+            ProgramState.UPCOMING -> {
+                Triple(c.programUpcoming, c.textSecondary, c.textTertiary)
+            }
         }
 
     Surface(
@@ -355,6 +371,14 @@ fun EpgProgramBlock(
                     if (playing) {
                         Box(
                             Modifier.size(6.dp).background(if (focused) c.playingOnFocus else c.playing, CircleShape),
+                        )
+                    }
+                    if (replayable) {
+                        Icon(
+                            painterResource(R.drawable.ont_ic_clock_counter_clockwise),
+                            contentDescription = null,
+                            tint = if (focused) c.onFocus else c.textMuted,
+                            modifier = Modifier.size(12.dp),
                         )
                     }
                     Text(

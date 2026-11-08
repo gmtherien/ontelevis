@@ -21,6 +21,7 @@
     <string name="vod_loading">Chargement…</string>
     <string name="vod_hint_playing">◀ ▶ 10 s · OK pause</string>
     <string name="vod_hint_paused">En pause · OK pour reprendre</string>
+    <string name="vod_error_catchup_missing">Le fournisseur n\'a pas d\'enregistrement de cette émission (son archive peut avoir un trou à cette heure-là).</string>
     <string name="vod_error_not_found">Ce titre n\'existe plus sur le serveur.</string>
     <string name="vod_error_unsupported">Ce format de fichier ne peut pas être lu.</string>
     <string name="vod_error_unreachable">Le fichier ne se charge pas. Revenez en arrière et réessayez.</string>

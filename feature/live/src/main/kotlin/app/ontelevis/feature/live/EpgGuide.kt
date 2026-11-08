@@ -1,6 +1,8 @@
 package app.ontelevis.feature.live
 
 import android.text.format.DateFormat
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -26,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -33,6 +36,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +81,7 @@ import app.ontelevis.core.model.epg.programState
 import app.ontelevis.core.model.epg.progressOf
 import app.ontelevis.core.model.epg.spanOf
 import app.ontelevis.core.model.parseChannelName
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -93,6 +98,8 @@ internal class GuideActions(
     val menu: (Channel) -> Unit,
     /** A block took the focus: its channel and programme (null: no guide for that channel). */
     val focused: (Channel, Programme?) -> Unit,
+    /** OK on a past programme that can be replayed (catch-up). */
+    val replay: (Channel, Programme) -> Unit,
 )
 
 /** Width of 30 minutes in the guide. The timeline is wider than the screen and scrolls. */
@@ -150,6 +157,9 @@ internal fun EpgGuide(
     playingRowFocus: FocusRequester,
     actions: GuideActions,
     modifier: Modifier = Modifier,
+    /** Back from a catch-up recording: (channel id, programme start). The guide opens on it. */
+    replayTarget: Pair<String, Long>? = null,
+    replayFocus: FocusRequester? = null,
 ) {
     val c = OntTheme.colors
     val times = rememberTimeFormatter()
@@ -164,19 +174,32 @@ internal fun EpgGuide(
         val total = SLOT_WIDTH * (window.duration.toMillis().toFloat() / SLOT_MS)
         // A new window opens with "now" a little inside the left edge (about 10 min of past shown),
         // so the now line and its time pill are never cut off.
+        // When the window grows into the past (catch-up) or the guide gets wider, the view stays on the
+        // same times: the scroll moves by the width added on the left, instead of jumping back to "now".
+        val previous = remember { arrayOfNulls<Pair<Instant, Timeline>>(1) }
         val timeline =
             remember(window.start, viewport, total) {
-                Timeline(total, viewport).apply {
-                    target =
-                        (
-                            total *
-                                window.fractionOf(
-                                    now,
-                                ) - SLOT_WIDTH / 3
-                        ).coerceIn(0.dp, (total - viewport).coerceAtLeast(0.dp))
-                }
+                val before = previous[0]
+                Timeline(total, viewport)
+                    .apply {
+                        target =
+                            // Also when only the width changes (guide mode widens the guide over a few frames).
+                            if (before != null && !window.start.isAfter(before.first)) {
+                                before.second.target +
+                                    SLOT_WIDTH *
+                                    (Duration.between(window.start, before.first).toMillis().toFloat() / SLOT_MS)
+                            } else {
+                                val at = replayTarget?.let { Instant.ofEpochMilli(it.second) } ?: now
+                                total * window.fractionOf(at) - SLOT_WIDTH / 3
+                            }.coerceIn(0.dp, (total - viewport).coerceAtLeast(0.dp))
+                    }.also { previous[0] = window.start to it }
             }
-        val scroll by animateDpAsState(timeline.target, tween(220), label = "guide-scroll")
+        // A new timeline starts where it is (no sweep across the added hours), then animates.
+        val scrollAnim = remember(timeline) { Animatable(timeline.target, Dp.VectorConverter) }
+        LaunchedEffect(timeline) {
+            snapshotFlow { timeline.target }.collect { scrollAnim.animateTo(it, tween(220)) }
+        }
+        val scroll = scrollAnim.value
         Column(Modifier.fillMaxSize()) {
             GuideHeader(channels.size, window, now, times, total, scroll)
             Box(Modifier.fillMaxWidth().height(OntDimens.Hairline).background(c.line))
@@ -200,6 +223,8 @@ internal fun EpgGuide(
                                 playingRowFocus.takeIf { channel.id == playingId },
                                 entry.takeIf { index == firstVisible },
                             ),
+                        replayStart = replayTarget?.takeIf { it.first == channel.id }?.second,
+                        replayFocus = replayFocus,
                         actions = actions,
                     )
                 }
@@ -238,13 +263,16 @@ private fun GuideHeader(
 ) {
     val c = OntTheme.colors
     val zone = ZoneId.systemDefault()
-    val day = window.start.atZone(zone).toLocalDate()
+    // The day shown is the one at the left edge of the view (the guide can scroll into yesterday).
+    val shownAt = window.start.plusMillis((window.duration.toMillis() * (scroll / total)).toLong())
+    val day = shownAt.atZone(zone).toLocalDate()
     val locale = LocalConfiguration.current.locales[0]
+    val today = LocalDate.now(zone)
     val dayLabel =
-        if (day == LocalDate.now(zone)) {
-            stringResource(R.string.live_guide_today)
-        } else {
-            day.format(DateTimeFormatter.ofPattern("EEE d MMM", locale))
+        when (day) {
+            today -> stringResource(R.string.live_guide_today)
+            today.minusDays(1) -> stringResource(R.string.live_guide_yesterday)
+            else -> day.format(DateTimeFormatter.ofPattern("EEE d MMM", locale))
         }
     Row(Modifier.fillMaxWidth().height(OntDimens.EpgHeaderHeight)) {
         Row(
@@ -302,6 +330,9 @@ private fun GuideRow(
     timeline: Timeline,
     scroll: Dp,
     focusTargets: List<FocusRequester>,
+    /** Start of the programme replayed on this row, to focus it again on return. */
+    replayStart: Long?,
+    replayFocus: FocusRequester?,
     actions: GuideActions,
 ) {
     val c = OntTheme.colors
@@ -379,6 +410,7 @@ private fun GuideRow(
                     focusTargets = focusTargets,
                     previous = null,
                     next = null,
+                    replayable = false,
                     onClick = { actions.open(channel) },
                     onLongClick = { actions.menu(channel) },
                     onFocused = { actions.focused(channel, null) },
@@ -406,6 +438,11 @@ private fun GuideRow(
                             } else {
                                 "${start.atZone(zone).format(times)} – ${end.atZone(zone).format(times)}"
                             }
+                        // Catch-up: a past programme still inside the channel's archive can be replayed.
+                        val replayable =
+                            state == ProgramState.PAST &&
+                                channel.catchupDays > 0 &&
+                                !start.isBefore(now.minus(Duration.ofDays(channel.catchupDays.toLong())))
                         // A row's focus target is its current programme (else its first block).
                         val isTarget = state == ProgramState.CURRENT || (index == 0 && !hasCurrent)
                         Block(
@@ -419,10 +456,14 @@ private fun GuideRow(
                             timeline = timeline,
                             scroll = scroll,
                             first = index == 0,
-                            focusTargets = listOf(blockFocus[index]) + if (isTarget) focusTargets else emptyList(),
+                            focusTargets =
+                                listOf(blockFocus[index]) +
+                                    (if (isTarget) focusTargets else emptyList()) +
+                                    listOfNotNull(replayFocus.takeIf { programme.startMillis == replayStart }),
                             previous = blockFocus.getOrNull(index - 1),
                             next = blockFocus.getOrNull(index + 1),
-                            onClick = { actions.open(channel) },
+                            replayable = replayable,
+                            onClick = { if (replayable) actions.replay(channel, programme) else actions.open(channel) },
                             onLongClick = { actions.menu(channel) },
                             onFocused = { actions.focused(channel, programme) },
                             actions = actions,
@@ -460,6 +501,7 @@ private fun Block(
     focusTargets: List<FocusRequester>,
     previous: FocusRequester?,
     next: FocusRequester?,
+    replayable: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFocused: () -> Unit,
@@ -497,7 +539,7 @@ private fun Block(
                             .size.width
                             .toDp()
                     // 12 dp padding each side, plus the "playing" dot before the title.
-                    maxOf(titleWidth + if (playing) 12.dp else 0.dp, subtitleWidth) + 24.dp + 2.dp
+                    maxOf(titleWidth + if (playing || replayable) 18.dp else 0.dp, subtitleWidth) + 24.dp + 2.dp
                 }
             }
         }
@@ -518,6 +560,7 @@ private fun Block(
         state = state,
         onClick = onClick,
         onLongClick = onLongClick,
+        replayable = replayable,
         playing = playing,
         progress = progress,
         modifier =

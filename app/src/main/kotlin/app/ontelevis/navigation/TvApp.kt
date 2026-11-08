@@ -147,6 +147,17 @@ fun TvApp() {
                     onAddPlaylist = { navController.navigate(AddPlaylistRoute) },
                     onOpenFullscreen = { navController.navigate(PlayerRoute) },
                     onGuideModeChange = { liveGuideMode = it },
+                    onOpenCatchup = { channelId, start, stop, title ->
+                        navController.navigate(
+                            VodPlayerRoute(
+                                contentId = "",
+                                catchupChannelId = channelId,
+                                catchupStart = start,
+                                catchupStop = stop,
+                                catchupTitle = title,
+                            ),
+                        )
+                    },
                 )
             }
             composable<PlayerRoute> { PlayerScreen() }

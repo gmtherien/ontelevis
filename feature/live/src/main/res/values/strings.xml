@@ -19,6 +19,7 @@
     <string name="live_error_unsupported">This stream format cannot be played.</string>
     <string name="live_error_unreachable">The stream does not respond. Press OK to try again.</string>
     <string name="live_error_restart_loop">The connection keeps dropping. Your provider may limit the number of connections.</string>
+    <string name="live_guide_yesterday">Yesterday</string>
     <string name="live_guide_today">Today</string>
     <string name="live_continuous_sub">24/7, no programme guide</string>
     <string name="live_no_info_title">No information</string>

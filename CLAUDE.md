@@ -21,7 +21,7 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   Room in batches of 500 inside one transaction (a failure keeps the old channels).
   `PlaylistSync` (WorkManager) refreshes daily and on "Update content".
 - Guide: `EpgImporter` streams XMLTV (gzip, relaxed XML for raw "&") into `programme`, only for the
-  playlist's own epg ids, from 1 day back to 7 days ahead. Link: user field, else Xtream `xmltv.php`,
+  playlist's own epg ids, from 1 day back (or the playlist's longest catch-up, max 7) to 7 days ahead. Link: user field, else Xtream `xmltv.php`,
   else the M3U header (`url-tvg` / `x-tvg-url`). Adding a playlist loads channels, then the guide in
   the background (`EpgRefreshWorker`).
 - VOD (`:feature:vod`, Films / Séries in the rail): Xtream movies and series load in the background
@@ -31,6 +31,13 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   prefixed per kind (`::m:` `::s:` `::e:`: Xtream movie and episode numbers collide). `VodPlayer`
   is separate from `LivePlayer`, which is held (`hold()` / `release()`) while a movie plays.
   Resume points in `watch_progress` (saved every 10 s and on exit; >= 95 % = finished).
+- Catch-up (Xtream only): `tv_archive_duration` -> `channel.catchupDays`; panel time zone from
+  `server_info.timezone` (`playlist.serverTimezone`, UTC if missing). Link
+  `/timeshift/u/p/{minutes}/{yyyy-MM-dd:HH-mm in panel zone}/{streamId}.ts` (`XtreamUrls.timeshift`).
+  The guide grows 6 h into the past when the focus nears its start on a catch-up channel
+  (`LiveViewModel.extendIntoPast`, re-anchoring keeps it); past programmes in the archive get a rewind
+  mark and OK plays them in `VodPlayerScreen` (`VodPlayerRoute.catchup*`, no resume point). Back lands
+  on the replayed programme. BLCK archives have gaps (404 = "no recording", not our link).
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
   suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.

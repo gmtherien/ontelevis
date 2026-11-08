@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import androidx.navigation.toRoute
+import app.ontelevis.core.data.ChannelRepository
 import app.ontelevis.core.data.PlaylistRepository
 import app.ontelevis.core.data.VodRepository
 import app.ontelevis.core.model.Episode
@@ -16,6 +17,7 @@ import app.ontelevis.core.model.Series
 import app.ontelevis.core.model.VodCategory
 import app.ontelevis.core.model.VodKind
 import app.ontelevis.core.model.WatchProgress
+import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.VodPlayer
 import app.ontelevis.core.player.VodState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +36,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import javax.inject.Inject
 
 /** A poster of the grid: a movie or a series, with its resume progress (movies). */
@@ -230,6 +236,8 @@ data class VodPlayerUiState(
     val title: String = "",
     val subtitle: String? = null,
     val missing: Boolean = false,
+    /** A catch-up recording (errors are worded for the archive). */
+    val catchup: Boolean = false,
 )
 
 @HiltViewModel
@@ -239,8 +247,12 @@ class VodPlayerViewModel
         savedState: SavedStateHandle,
         private val vod: VodRepository,
         private val player: VodPlayer,
+        private val channels: ChannelRepository,
     ) : ViewModel() {
         private val route = savedState.toRoute<VodPlayerRoute>()
+
+        /** A catch-up recording: no resume point, no next episode. */
+        private val catchup = route.catchupChannelId != null
         private var contentId = route.contentId
         private val _ui = MutableStateFlow(VodPlayerUiState())
         val ui: StateFlow<VodPlayerUiState> = _ui.asStateFlow()
@@ -251,7 +263,9 @@ class VodPlayerViewModel
         val durationMs: Long get() = player.durationMs
 
         init {
-            viewModelScope.launch { start(contentId, fromStart = route.fromStart) }
+            viewModelScope.launch {
+                if (catchup) startCatchup() else start(contentId, fromStart = route.fromStart)
+            }
             // Resume point every 10 s, so a crash or a power cut loses little.
             viewModelScope.launch {
                 while (true) {
@@ -298,7 +312,31 @@ class VodPlayerViewModel
             player.play(id, url, resume)
         }
 
+        private suspend fun startCatchup() {
+            val channel = route.catchupChannelId?.let { channels.channel(it) }
+            val url = channel?.let { channels.catchupUrl(it, route.catchupStart, route.catchupStop) }
+            if (channel == null || url == null) {
+                _ui.value = VodPlayerUiState(missing = true)
+                return
+            }
+            val zone = ZoneId.systemDefault()
+            val start = Instant.ofEpochMilli(route.catchupStart).atZone(zone)
+            val end = Instant.ofEpochMilli(route.catchupStop).atZone(zone)
+            val day = start.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+            val hours = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+            _ui.value =
+                VodPlayerUiState(
+                    title = route.catchupTitle ?: parseChannelName(channel.name).title,
+                    subtitle = "${parseChannelName(
+                        channel.name,
+                    ).title} · $day · ${start.format(hours)} – ${end.format(hours)}",
+                )
+            contentId = "catchup:${channel.id}:${route.catchupStart}"
+            player.play(contentId, url, 0)
+        }
+
         private suspend fun onEnded() {
+            if (catchup) return
             saveProgress()
             if (!isEpisode(contentId)) return
             val current = vod.episode(contentId) ?: return
@@ -308,6 +346,7 @@ class VodPlayerViewModel
         }
 
         private suspend fun saveProgress() {
+            if (catchup) return
             val duration = player.durationMs
             if (duration <= 0 || player.state.value.contentId != contentId) return
             vod.saveProgress(WatchProgress(contentId, player.positionMs, duration))
@@ -319,7 +358,7 @@ class VodPlayerViewModel
             val position = player.positionMs
             val id = contentId
             player.stop()
-            if (duration > 0) {
+            if (duration > 0 && !catchup) {
                 kotlinx.coroutines.MainScope().launch { vod.saveProgress(WatchProgress(id, position, duration)) }
             }
         }

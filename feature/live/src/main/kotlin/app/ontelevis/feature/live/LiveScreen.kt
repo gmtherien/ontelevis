@@ -113,6 +113,9 @@ private class LiveActions(
     val setGroupHidden: (ChannelGroup, Boolean) -> Unit,
     val toggleShowHidden: () -> Unit,
     val clearHistory: () -> Unit,
+    val extendIntoPast: (Channel) -> Unit,
+    /** Plays a past programme (catch-up) full screen. */
+    val replay: (Channel, Programme) -> Unit,
 )
 
 /**
@@ -124,6 +127,8 @@ private class LiveActions(
 fun LiveScreen(
     onAddPlaylist: () -> Unit,
     onOpenFullscreen: () -> Unit,
+    /** Catch-up: plays [channelId] from [startMillis] to [stopMillis] ([title] is the programme). */
+    onOpenCatchup: (channelId: String, startMillis: Long, stopMillis: Long, title: String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
     /** True while the guide has the focus: the shell hides its rail so the guide gets the width. */
     onGuideModeChange: (Boolean) -> Unit = {},
@@ -137,7 +142,7 @@ fun LiveScreen(
     val now by viewModel.now.collectAsStateWithLifecycle()
     val playingProgrammes by viewModel.playingProgrammes.collectAsStateWithLifecycle()
     val actions =
-        remember(viewModel, onAddPlaylist, onOpenFullscreen) {
+        remember(viewModel, onAddPlaylist, onOpenFullscreen, onOpenCatchup) {
             LiveActions(
                 select = viewModel::select,
                 play = viewModel::play,
@@ -148,6 +153,11 @@ fun LiveScreen(
                 setGroupHidden = viewModel::setGroupHidden,
                 toggleShowHidden = viewModel::toggleShowHidden,
                 clearHistory = viewModel::clearHistory,
+                extendIntoPast = viewModel::extendIntoPast,
+                replay = { channel, programme ->
+                    viewModel.lastReplay = channel.id to programme.startMillis
+                    onOpenCatchup(channel.id, programme.startMillis, programme.stopMillis, programme.title)
+                },
             )
         }
     if (LocalIsTv.current) {
@@ -159,6 +169,8 @@ fun LiveScreen(
             viewModel.player,
             actions,
             onGuideModeChange,
+            viewModel.lastReplay,
+            { viewModel.lastReplay = null },
             modifier,
         )
     } else {
@@ -176,6 +188,9 @@ private fun groupLabel(group: ChannelGroup): String =
         // Category names stay exactly as the provider wrote them (emoji and prefixes included).
         null -> group.name.ifEmpty { stringResource(R.string.live_uncategorized) }
     }
+
+/** A programme focused this close to the window start extends the guide into the past (catch-up). */
+private const val NEAR_WINDOW_START_MS = 2 * 60 * 60 * 1000L
 
 /** What to show instead of the channels, if anything. */
 private enum class LiveStatus { LOADING, NO_PLAYLIST, NOT_LOADED, FAILED, READY }
@@ -248,6 +263,9 @@ private fun TvLive(
     player: Player?,
     actions: LiveActions,
     onGuideModeChange: (Boolean) -> Unit,
+    /** Last programme replayed (catch-up): the guide comes back to it. */
+    replayTarget: Pair<String, Long>?,
+    clearReplayTarget: () -> Unit,
     modifier: Modifier,
 ) {
     val c = OntTheme.colors
@@ -258,6 +276,7 @@ private fun TvLive(
     val panelFocus = remember { FocusRequester() }
     val guideEntry = remember { FocusRequester() }
     val playingRowFocus = remember { FocusRequester() }
+    val replayFocus = remember { FocusRequester() }
     val previewFocus = remember { FocusRequester() }
     val categoryList = rememberLazyListState()
     val groupKey = state.selectedGroup?.key
@@ -327,6 +346,21 @@ private fun TvLive(
         runCatching { guideEntry.requestFocus() }
     }
 
+    // Back from a catch-up recording: the programme that was replayed (its row and time are put on
+    // screen; its block exists once the row's programmes are loaded).
+    suspend fun focusReplayed(): Boolean {
+        val target = replayTarget ?: return false
+        val index = latestChannels.list.indexOfFirst { it.id == target.first }
+        if (index < 0) return false
+        guideList.scrollToItem((index - 1).coerceAtLeast(0))
+        repeat(20) {
+            withFrameNanos { }
+            if (runCatching { replayFocus.requestFocus() }.isSuccess) return true
+            delay(100)
+        }
+        return false
+    }
+
     // The remote must always have something focused: decide when the categories arrive.
     val ready = state.hasCategories
     LaunchedEffect(ready) {
@@ -335,7 +369,9 @@ private fun TvLive(
             ReturnFocus.GUIDE -> {
                 returnFocus = ReturnFocus.NONE
                 withTimeoutOrNull(2_000) { snapshotFlow { latestChannels.list }.first { it.isNotEmpty() } }
-                focusGuide()
+                val replayed = focusReplayed()
+                clearReplayTarget()
+                if (!replayed) focusGuide()
             }
 
             ReturnFocus.PREVIEW -> {
@@ -382,7 +418,20 @@ private fun TvLive(
             },
             leftEdge = { scope.launch { focusCategory() } },
             menu = { channelMenu = it },
-            focused = { channel, programme -> guideFocus = GuideFocus(channel, programme) },
+            focused = { channel, programme ->
+                guideFocus = GuideFocus(channel, programme)
+                // Catch-up: nearing the start of the window, the guide reaches further into the past.
+                if (programme != null &&
+                    channel.catchupDays > 0 &&
+                    programme.startMillis - guide.window.start.toEpochMilli() < NEAR_WINDOW_START_MS
+                ) {
+                    actions.extendIntoPast(channel)
+                }
+            },
+            replay = { channel, programme ->
+                returnFocus = ReturnFocus.GUIDE
+                actions.replay(channel, programme)
+            },
         )
 
     Row(modifier.fillMaxSize().background(c.background)) {
@@ -490,6 +539,8 @@ private fun TvLive(
                             entry = guideEntry,
                             playingRowFocus = playingRowFocus,
                             actions = guideActions,
+                            replayTarget = replayTarget,
+                            replayFocus = replayFocus,
                             modifier =
                                 Modifier.onFocusChanged {
                                     guideFocused = it.hasFocus

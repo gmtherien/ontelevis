@@ -18,7 +18,8 @@ import javax.inject.Inject
 /**
  * Downloads a playlist's XMLTV guide and replaces its programmes. The guide is parsed as a stream
  * and written in batches inside one transaction; only programmes of the playlist's own channels,
- * from 1 day back to 7 days ahead, are kept. A failure leaves the previous guide in place.
+ * from 1 day back (longer when the playlist has catch-up, up to 7 days) to 7 days ahead, are kept.
+ * A failure leaves the previous guide in place.
  */
 class EpgImporter
     @Inject
@@ -47,7 +48,9 @@ class EpgImporter
                 try {
                     val keys = channelDao.epgKeys(playlist.id).toHashSet()
                     if (keys.isEmpty()) return@withContext 0
-                    val from = now - KEEP_PAST_MS
+                    // Past programmes stay as long as the playlist's catch-up reaches (they can be replayed).
+                    val catchupDays = channelDao.maxCatchupDays(playlist.id).coerceIn(0, MAX_CATCHUP_DAYS)
+                    val from = now - maxOf(KEEP_PAST_MS, catchupDays * DAY_MS)
                     val to = now + KEEP_FUTURE_MS
                     val parser =
                         XmltvParser {
@@ -90,6 +93,8 @@ class EpgImporter
             const val RELAXED = "http://xmlpull.org/v1/doc/features.html#relaxed"
             const val BATCH_SIZE = 1_000
             const val KEEP_PAST_MS = 24L * 60 * 60 * 1000
+            const val DAY_MS = 24L * 60 * 60 * 1000
+            const val MAX_CATCHUP_DAYS = 7
             const val KEEP_FUTURE_MS = 7L * 24 * 60 * 60 * 1000
         }
     }

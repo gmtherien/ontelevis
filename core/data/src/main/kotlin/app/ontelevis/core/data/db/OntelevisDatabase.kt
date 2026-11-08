@@ -40,6 +40,8 @@ data class PlaylistEntity(
     @ColumnInfo(defaultValue = "0") val movieCount: Int = 0,
     @ColumnInfo(defaultValue = "0") val seriesCount: Int = 0,
     val lastVodAt: Long? = null,
+    /** Xtream panel time zone (`server_info.timezone`), for catch-up start times. */
+    val serverTimezone: String? = null,
 )
 
 @Entity(
@@ -107,6 +109,12 @@ interface PlaylistDao {
         at: Long,
     )
 
+    @Query("UPDATE playlist SET serverTimezone = :timezone WHERE id = :id")
+    fun setServerTimezone(
+        id: Long,
+        timezone: String?,
+    )
+
     @Query("UPDATE playlist SET detectedEpgUrl = :url WHERE id = :id")
     suspend fun setDetectedEpgUrl(
         id: Long,
@@ -159,6 +167,10 @@ interface ChannelDao {
 
     @Query("SELECT * FROM channel WHERE id = :id")
     suspend fun get(id: String): ChannelEntity?
+
+    /** Longest catch-up of the playlist's channels, in days (the guide keeps that much past). */
+    @Query("SELECT COALESCE(MAX(catchupDays), 0) FROM channel WHERE playlistId = :playlistId")
+    fun maxCatchupDays(playlistId: Long): Int
 
     @Query("SELECT * FROM channel WHERE playlistId = :playlistId AND groupName = :group ORDER BY sortOrder")
     suspend fun inGroup(
@@ -225,13 +237,13 @@ interface ChannelGroupDao {
         GroupPrefEntity::class,
         VodFavoriteEntity::class,
     ],
-    version = 5,
+    version = 6,
     // From version 3 on, schema changes keep the user's data (no more wipe).
     autoMigrations = [
-        AutoMigration(
-            from = 2,
-            to = 3,
-        ), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6),
     ],
     exportSchema = true,
 )
