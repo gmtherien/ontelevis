@@ -146,7 +146,7 @@ class LiveViewModel
                     closedKeys = closedKeys,
                     hasPin = hasPin,
                 )
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveUiState())
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, LiveUiState())
 
         @OptIn(ExperimentalCoroutinesApi::class)
         val channels: StateFlow<GroupChannels> =
@@ -166,7 +166,7 @@ class LiveViewModel
                         group.shortcut == Shortcut.HISTORY -> history.map { GroupChannels(group.key, it) }
                         else -> channelRepository.observeChannels(group).map { GroupChannels(group.key, it) }
                     }
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GroupChannels())
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, GroupChannels())
 
         val live: StateFlow<LiveState> = livePlayer.state
 
@@ -206,7 +206,7 @@ class LiveViewModel
                         channels.groupKey,
                         epgRepository.programmes(channels.list, window.start.toEpochMilli(), window.end.toEpochMilli()),
                     )
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GuideProgrammes())
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, GuideProgrammes())
 
         /** Now and next of the channel in the player (info panel). */
         val playingProgrammes: StateFlow<List<Programme>> =
@@ -215,7 +215,7 @@ class LiveViewModel
                 epgRepository,
                 now,
                 epgStamp,
-            ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            ).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         init {
             viewModelScope.launch {
@@ -348,7 +348,7 @@ class PlayerViewModel
                 epgRepository,
                 minuteTicker(),
                 playlistRepository.observePlaylists().map { list -> list.map { it.lastEpgAt } }.distinctUntilChanged(),
-            ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            ).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         val player: Player? get() = livePlayer.player
 

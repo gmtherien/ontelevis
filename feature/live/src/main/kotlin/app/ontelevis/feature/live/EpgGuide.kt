@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -63,6 +64,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.Icon
@@ -111,8 +113,11 @@ private val SLOT_MS = 30L * 60 * 1000
 @Stable
 private class Timeline(
     val total: Dp,
-    val viewport: Dp,
+    viewport: Dp,
 ) {
+    /** Visible width of the track. Changes with the screen layout, without rebuilding the timeline. */
+    var viewport by mutableStateOf(viewport)
+
     /** Where the scroll is going (the animation follows it). */
     var target by mutableStateOf(0.dp)
 
@@ -175,16 +180,17 @@ internal fun EpgGuide(
         val total = SLOT_WIDTH * (window.duration.toMillis().toFloat() / SLOT_MS)
         // A new window opens with "now" a little inside the left edge (about 10 min of past shown),
         // so the now line and its time pill are never cut off.
-        // When the window grows into the past (catch-up) or the guide gets wider, the view stays on the
-        // same times: the scroll moves by the width added on the left, instead of jumping back to "now".
+        // When the window grows into the past (catch-up), the view stays on the same times: the scroll
+        // moves by the width added on the left, instead of jumping back to "now".
         val previous = remember { arrayOfNulls<Pair<Instant, Timeline>>(1) }
+        // Keyed on the window only: a width change (guide mode) updates the viewport below instead of
+        // rebuilding the timeline, its scroll animation and every row on each animation frame.
         val timeline =
-            remember(window.start, viewport, total) {
+            remember(window.start, total) {
                 val before = previous[0]
                 Timeline(total, viewport)
                     .apply {
                         target =
-                            // Also when only the width changes (guide mode widens the guide over a few frames).
                             if (before != null && !window.start.isAfter(before.first)) {
                                 before.second.target +
                                     SLOT_WIDTH *
@@ -195,12 +201,20 @@ internal fun EpgGuide(
                             }.coerceIn(0.dp, (total - viewport).coerceAtLeast(0.dp))
                     }.also { previous[0] = window.start to it }
             }
+        SideEffect {
+            if (timeline.viewport != viewport) {
+                timeline.viewport = viewport
+                timeline.target = timeline.target.coerceIn(0.dp, (total - viewport).coerceAtLeast(0.dp))
+            }
+        }
         // A new timeline starts where it is (no sweep across the added hours), then animates.
         val scrollAnim = remember(timeline) { Animatable(timeline.target, Dp.VectorConverter) }
         LaunchedEffect(timeline) {
             snapshotFlow { timeline.target }.collect { scrollAnim.animateTo(it, tween(220)) }
         }
-        val scroll = scrollAnim.value
+        // Read during layout only (not composition): a scroll frame moves the blocks without
+        // recomposing every row.
+        val scroll: () -> Dp = remember(scrollAnim) { { scrollAnim.value } }
         // Up / Down: the block of the next channel at the same time (the current time when moving from
         // the programme on now). Plain focus search picked whichever block was geometrically closest.
         val rows = remember { mutableMapOf<Int, RowFocus>() }
@@ -281,7 +295,7 @@ internal fun EpgGuide(
 @Composable
 private fun RowScope.TimelineTrack(
     total: Dp,
-    scroll: Dp,
+    scroll: () -> Dp,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
@@ -290,7 +304,7 @@ private fun RowScope.TimelineTrack(
                 .wrapContentWidth(Alignment.Start, unbounded = true)
                 .width(total)
                 .fillMaxHeight()
-                .offset(x = -scroll),
+                .offset { IntOffset(-scroll().roundToPx(), 0) },
             content = content,
         )
     }
@@ -303,13 +317,20 @@ private fun GuideHeader(
     now: Instant,
     times: DateTimeFormatter,
     total: Dp,
-    scroll: Dp,
+    scroll: () -> Dp,
 ) {
     val c = OntTheme.colors
     val zone = ZoneId.systemDefault()
     // The day shown is the one at the left edge of the view (the guide can scroll into yesterday).
-    val shownAt = window.start.plusMillis((window.duration.toMillis() * (scroll / total)).toLong())
-    val day = shownAt.atZone(zone).toLocalDate()
+    // The day changes rarely: only that change recomposes the header, not every scroll frame.
+    val day by remember(window, total) {
+        derivedStateOf {
+            window.start
+                .plusMillis((window.duration.toMillis() * (scroll() / total)).toLong())
+                .atZone(zone)
+                .toLocalDate()
+        }
+    }
     val locale = LocalConfiguration.current.locales[0]
     val today = LocalDate.now(zone)
     val dayLabel =
@@ -372,7 +393,7 @@ private fun GuideRow(
     groupName: String,
     times: DateTimeFormatter,
     timeline: Timeline,
-    scroll: Dp,
+    scroll: () -> Dp,
     focusTargets: List<FocusRequester>,
     /** Start of the programme replayed on this row, to focus it again on return. */
     replayStart: Long?,
@@ -385,8 +406,9 @@ private fun GuideRow(
 ) {
     val c = OntTheme.colors
     // Time at the left edge of the visible part (reference for programmes that began before it).
-    val viewStartMillis =
-        window.start.toEpochMilli() + (window.duration.toMillis() * (scroll / timeline.total)).toLong()
+    val viewStartMillis = {
+        window.start.toEpochMilli() + (window.duration.toMillis() * (scroll() / timeline.total)).toLong()
+    }
     val parsed = remember(channel.name) { parseChannelName(channel.name) }
     val meta =
         listOfNotNull(parsed.group ?: groupName.ifEmpty { null }, parsed.tags.joinToString(" ").ifEmpty { null })
@@ -543,7 +565,7 @@ private fun GuideRow(
                                     ) {
                                         null
                                     } else {
-                                        maxOf(programme.startMillis, viewStartMillis)
+                                        maxOf(programme.startMillis, viewStartMillis())
                                     },
                                 )
                                 actions.focused(channel, programme)
@@ -578,7 +600,7 @@ private fun Block(
     x: Dp,
     blockWidth: Dp,
     timeline: Timeline,
-    scroll: Dp,
+    scroll: () -> Dp,
     first: Boolean,
     focusTargets: List<FocusRequester>,
     previous: FocusRequester?,
@@ -595,15 +617,6 @@ private fun Block(
     val inset = OntDimens.EpgBlockInsetH / 2
     val start = x + inset
     val end = (x + blockWidth - inset).coerceAtLeast(start + 6.dp)
-    // A programme that began before the visible edge keeps its title in view ("sticky" left edge).
-    val viewStart = scroll + inset
-    val viewEnd = scroll + timeline.viewport - inset
-    val shownStart = maxOf(start, viewStart).coerceAtMost(end - 6.dp)
-    val restWidth = minOf(end, maxOf(viewEnd, shownStart + 6.dp)) - shownStart
-    // Blocks keep their real width when focused: the info panel above the guide shows the focused
-    // programme's title and times (the earlier "widen on focus" covered the neighbouring blocks).
-    val shownWidth = restWidth
-    val left = shownStart
     EpgProgramBlock(
         title = title,
         subtitle = subtitle,
@@ -615,9 +628,23 @@ private fun Block(
         progress = progress,
         modifier =
             Modifier
-                .offset(x = left)
-                .width(shownWidth)
-                .padding(vertical = OntDimens.EpgBlockInsetV)
+                // Position from the scroll, computed during layout (no recomposition per scroll frame).
+                // A programme that began before the visible edge keeps its title in view ("sticky"
+                // left edge). Blocks keep their real width when focused: the info panel shows the rest.
+                .layout { measurable, constraints ->
+                    val viewStart = scroll() + inset
+                    val viewEnd = scroll() + timeline.viewport - inset
+                    val shownStart = maxOf(start, viewStart).coerceAtMost(end - 6.dp)
+                    val width =
+                        (
+                            minOf(
+                                end,
+                                maxOf(viewEnd, shownStart + 6.dp),
+                            ) - shownStart
+                        ).roundToPx().coerceAtLeast(0)
+                    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+                    layout(width, placeable.height) { placeable.place(shownStart.roundToPx(), 0) }
+                }.padding(vertical = OntDimens.EpgBlockInsetV)
                 .zIndex(if (focused) 2f else 0f)
                 .onFocusChanged {
                     focused = it.isFocused

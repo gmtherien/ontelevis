@@ -82,6 +82,7 @@ import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPrimaryButton
+import app.ontelevis.core.designsystem.component.OntSlidingPanelLayout
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
 import app.ontelevis.core.designsystem.component.SectionLabel
@@ -352,15 +353,11 @@ private fun TvLive(
     // and the guide uses the whole width. A channel menu opened from the guide keeps the mode.
     var guideFocused by remember { mutableStateOf(false) }
     var guideFocus by remember { mutableStateOf<GuideFocus?>(null) }
-    val guideMode = guideFocused || channelMenu != null
+    // Back from full screen opened from the guide: guide mode from the very first frame (no panel
+    // showing then sliding away while the screen comes back).
+    val guideMode = guideFocused || channelMenu != null || returnFocus == ReturnFocus.GUIDE
     val latestOnGuideMode by rememberUpdatedState(onGuideModeChange)
     LaunchedEffect(guideMode) { latestOnGuideMode(guideMode) }
-    DisposableEffect(Unit) { onDispose { latestOnGuideMode(false) } }
-    val panelWidth by animateDpAsState(
-        targetValue = if (guideMode) 0.dp else OntDimens.CategoryPanelWidth,
-        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
-        label = "categories-width",
-    )
     val entries = remember(state) { panelEntries(state) }
     val latestState by rememberUpdatedState(state)
     val latestEntries by rememberUpdatedState(entries)
@@ -424,11 +421,12 @@ private fun TvLive(
         if (!ready) return@LaunchedEffect
         when (returnFocus) {
             ReturnFocus.GUIDE -> {
-                returnFocus = ReturnFocus.NONE
                 withTimeoutOrNull(2_000) { snapshotFlow { latestChannels.list }.first { it.isNotEmpty() } }
                 val replayed = focusReplayed()
                 clearReplayTarget()
                 if (!replayed) focusGuide()
+                // Last: guide mode stays on until the guide holds the focus.
+                returnFocus = ReturnFocus.NONE
             }
 
             ReturnFocus.PREVIEW -> {
@@ -491,10 +489,13 @@ private fun TvLive(
             },
         )
 
-    Row(modifier.fillMaxSize().background(c.background)) {
-        // The panel keeps its width and slides out to the left (its rows stay laid out, so focus can
-        // come back to them at once).
-        Box(Modifier.width(panelWidth).fillMaxHeight().clipToBounds()) {
+    // The categories slide out of the screen in guide mode (translation only: their rows stay laid out,
+    // so the focus can come back to them at once, and nothing is re-measured per animation frame).
+    OntSlidingPanelLayout(
+        panelWidth = OntDimens.CategoryPanelWidth,
+        hidden = guideMode,
+        modifier = modifier.fillMaxSize().background(c.background),
+        panel = {
             CategoryPanel(
                 title = title,
                 entries = entries,
@@ -526,18 +527,14 @@ private fun TvLive(
                 focusKey = panelFocusKey ?: state.selectedGroup?.entryKey,
                 focusRequester = panelFocus,
                 listState = categoryList,
-                modifier =
-                    Modifier
-                        .wrapContentWidth(Alignment.End, unbounded = true)
-                        .width(OntDimens.CategoryPanelWidth)
-                        .fillMaxHeight(),
+                modifier = Modifier.fillMaxSize(),
             )
-        }
+        },
+    ) {
         Column(
             modifier =
                 Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                    .fillMaxSize()
                     .padding(
                         start = OntDimens.ContentStartPadding,
                         end = OntDimens.ContentEndPadding,

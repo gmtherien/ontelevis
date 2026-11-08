@@ -70,6 +70,7 @@ import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPosterCard
 import app.ontelevis.core.designsystem.component.OntSecondaryButton
+import app.ontelevis.core.designsystem.component.OntSlidingPanelLayout
 import app.ontelevis.core.designsystem.component.OntTextField
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
@@ -131,15 +132,12 @@ fun VodBrowseScreen(
     var sortFocused by remember { mutableStateOf(false) }
     // The search and sort bar belong to the posters, not to a category: the categories stay hidden
     // while it has the focus (they come back when Left or Back goes to them).
-    val posterMode = tv && (gridFocused || menuItem != null || searchFocused || sortFocused || sortMenu)
+    // Back from a poster's page: poster mode from the first frame, until the poster has the focus again.
+    var returningToPoster by remember { mutableStateOf(viewModel.lastOpenedId != null) }
+    val posterMode =
+        tv && (gridFocused || returningToPoster || menuItem != null || searchFocused || sortFocused || sortMenu)
     val latestOnPosterMode by rememberUpdatedState(onPosterModeChange)
     LaunchedEffect(posterMode) { latestOnPosterMode(posterMode) }
-    DisposableEffect(Unit) { onDispose { latestOnPosterMode(false) } }
-    val panelWidth by animateDpAsState(
-        targetValue = if (posterMode) 0.dp else OntDimens.CategoryPanelWidth,
-        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
-        label = "vod-categories-width",
-    )
     val latestItems by rememberUpdatedState(itemsState)
 
     // Category whose posters should take the focus once they are on screen (OK on a category).
@@ -179,8 +177,12 @@ fun VodBrowseScreen(
                     gridState.scrollToItem(index)
                     withFrameNanos { }
                 }
-                if (runCatching { returnFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                if (runCatching { returnFocus.requestFocus() }.isSuccess) {
+                    returningToPoster = false
+                    return@LaunchedEffect
+                }
             }
+            returningToPoster = false
             focusCategory()
         }
     }
@@ -196,94 +198,97 @@ fun VodBrowseScreen(
         gridFocusFor = null
     }
 
-    Row(modifier.fillMaxSize().background(c.background)) {
-        if (tv) {
-            // The panel keeps its width and slides out to the left (its rows stay laid out, so the
-            // focus can come back to the selected category at once).
-            Box(Modifier.width(panelWidth).fillMaxHeight().clipToBounds()) {
-                Column(
-                    Modifier
-                        .wrapContentWidth(Alignment.End, unbounded = true)
-                        .width(OntDimens.CategoryPanelWidth)
-                        .fillMaxHeight()
-                        .drawBehind {
-                            drawLine(c.line, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx())
-                        }.padding(start = 16.dp, end = 16.dp, top = OntDimens.SafeVertical),
-                ) {
-                    Text(
-                        title,
-                        style = OntTheme.type.title,
-                        color = c.textPrimary,
-                        modifier = Modifier.padding(start = 10.dp),
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    LazyColumn(
-                        state = categoryList,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
+    // TV: the categories slide out of the screen in poster mode (translation only: their rows stay laid
+    // out, so the focus can come back to the selected category at once). Phones have no panel.
+    OntSlidingPanelLayout(
+        panelWidth = if (tv) OntDimens.CategoryPanelWidth else 0.dp,
+        hidden = posterMode,
+        modifier = modifier.fillMaxSize().background(c.background),
+        panel = {
+            if (tv) {
+                run {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                drawLine(c.line, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx())
+                            }.padding(start = 16.dp, end = 16.dp, top = OntDimens.SafeVertical),
                     ) {
-                        itemsIndexed(state.categories, key = {
-                            _,
-                            it,
-                            ->
-                            "${it.playlistId}/${it.name}"
-                        }) { index, category ->
-                            val selected = category.key == state.selected?.key
-                            // The "Categories" label sits above the first provider category (under Favourites).
-                            val firstProvider =
-                                !category.isFavorites && state.categories.getOrNull(index - 1)?.isFavorites != false
-                            if (firstProvider) {
-                                SectionLabel(
-                                    stringResource(R.string.vod_categories),
-                                    Modifier.padding(
-                                        start = 10.dp,
-                                        top = if (index > 0) 12.dp else 0.dp,
-                                        bottom = 8.dp,
-                                    ),
+                        Text(
+                            title,
+                            style = OntTheme.type.title,
+                            color = c.textPrimary,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        LazyColumn(
+                            state = categoryList,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
+                        ) {
+                            itemsIndexed(state.categories, key = {
+                                _,
+                                it,
+                                ->
+                                "${it.playlistId}/${it.name}"
+                            }) { index, category ->
+                                val selected = category.key == state.selected?.key
+                                // The "Categories" label sits above the first provider category (under Favourites).
+                                val firstProvider =
+                                    !category.isFavorites && state.categories.getOrNull(index - 1)?.isFavorites != false
+                                if (firstProvider) {
+                                    SectionLabel(
+                                        stringResource(R.string.vod_categories),
+                                        Modifier.padding(
+                                            start = 10.dp,
+                                            top = if (index > 0) 12.dp else 0.dp,
+                                            bottom = 8.dp,
+                                        ),
+                                    )
+                                }
+                                OntListItem(
+                                    leadingIcon =
+                                        if (category.isFavorites) {
+                                            { tint ->
+                                                Icon(
+                                                    painterResource(DesignR.drawable.ont_ic_star),
+                                                    contentDescription = null,
+                                                    tint = tint,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                    text = categoryLabel(category),
+                                    selected = selected,
+                                    onClick = {
+                                        if (category.key in state.closedKeys) {
+                                            // A locked category asks for the PIN first.
+                                            pinRequest = VodPinRequest.Open(category)
+                                        } else {
+                                            viewModel.select(category)
+                                            viewModel.setQuery("")
+                                            gridFocusFor = category.key
+                                        }
+                                    },
+                                    onLongClick = { categoryMenu = category }.takeIf { !category.isFavorites },
+                                    locked = category.key in state.lockedKeys,
+                                    modifier =
+                                        Modifier
+                                            .focusProperties { if (items.isNotEmpty()) right = gridEntry }
+                                            .then(if (selected) Modifier.focusRequester(categoryFocus) else Modifier),
                                 )
                             }
-                            OntListItem(
-                                leadingIcon =
-                                    if (category.isFavorites) {
-                                        { tint ->
-                                            Icon(
-                                                painterResource(DesignR.drawable.ont_ic_star),
-                                                contentDescription = null,
-                                                tint = tint,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                text = categoryLabel(category),
-                                selected = selected,
-                                onClick = {
-                                    if (category.key in state.closedKeys) {
-                                        // A locked category asks for the PIN first.
-                                        pinRequest = VodPinRequest.Open(category)
-                                    } else {
-                                        viewModel.select(category)
-                                        viewModel.setQuery("")
-                                        gridFocusFor = category.key
-                                    }
-                                },
-                                onLongClick = { categoryMenu = category }.takeIf { !category.isFavorites },
-                                locked = category.key in state.lockedKeys,
-                                modifier =
-                                    Modifier
-                                        .focusProperties { if (items.isNotEmpty()) right = gridEntry }
-                                        .then(if (selected) Modifier.focusRequester(categoryFocus) else Modifier),
-                            )
                         }
                     }
                 }
             }
-        }
+        },
+    ) {
         Column(
             Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
                 .padding(
                     start = if (tv) OntDimens.ContentStartPadding else 16.dp,
                     end = if (tv) OntDimens.ContentEndPadding else 16.dp,

@@ -2,7 +2,13 @@ package app.ontelevis.navigation
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +61,9 @@ private fun NavDestination.railKey(): RailKey =
         else -> RailKey.SETTINGS
     }
 
+/** Navigation Compose's default crossfade, kept between ordinary screens. */
+private const val DEFAULT_FADE_MS = 700
+
 /** Screens where Back first goes up to the rail (the top of each rail destination). */
 private fun NavDestination.isRailTop(): Boolean =
     hasRoute(LiveRoute::class) || hasRoute(MoviesRoute::class) || hasRoute(SeriesListRoute::class)
@@ -80,6 +89,9 @@ fun TvApp() {
     // Guide / poster mode: the guide (TV) or the posters (Movies, Series) have the focus and take the
     // whole width (rail hidden).
     var wideContent by remember { mutableStateOf(false) }
+    // Kept across a trip to a player or a movie page (same rail entry): the screen comes back wide at
+    // once. A new rail entry starts with the rail shown.
+    LaunchedEffect(selected) { wideContent = false }
     // Back climbs one level before leaving: from a destination's content up to the rail.
     BackHandler(enabled = !railFocused && destination?.isRailTop() == true) { runCatching { railEntry.requestFocus() } }
 
@@ -142,7 +154,26 @@ fun TvApp() {
             }
         },
     ) {
-        NavHost(navController = navController, startDestination = LiveRoute) {
+        NavHost(
+            navController = navController,
+            startDestination = LiveRoute,
+            // Into and out of a full-screen player: a plain cut. The default 700 ms crossfade drew both
+            // screens at once while the TV screen was being rebuilt, which stuttered on TV boxes.
+            enterTransition = {
+                if (initialState.destination.isPlayer() || targetState.destination.isPlayer()) {
+                    EnterTransition.None
+                } else {
+                    fadeIn(tween(DEFAULT_FADE_MS))
+                }
+            },
+            exitTransition = {
+                if (initialState.destination.isPlayer() || targetState.destination.isPlayer()) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(tween(DEFAULT_FADE_MS))
+                }
+            },
+        ) {
             composable<LiveRoute> {
                 LiveScreen(
                     onAddPlaylist = { navController.navigate(AddPlaylistRoute) },

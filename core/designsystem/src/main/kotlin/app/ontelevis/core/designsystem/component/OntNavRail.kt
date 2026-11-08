@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,19 +82,22 @@ fun OntNavRailScaffold(
         label = "rail-width",
     )
     val selectedRequester = entryRequester
-    // The content slides over the rail's place when the rail goes away (guide mode), instead of jumping.
-    val contentStart by animateDpAsState(
-        targetValue = if (railVisible) OntDimens.NavRailWidth else 0.dp,
-        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
-        label = "rail-content-start",
-    )
+    // When the rail goes away (guide mode, players) it slides out and the content slides over its
+    // place. Translations only: the content takes its wide layout once instead of on every frame.
+    val slide = rememberSlideState(hidden = !railVisible)
+    val railShown by remember { derivedStateOf { slide.progress.value < 1f } }
 
     Box(modifier.fillMaxSize().background(c.background)) {
         Box(
-            Modifier.fillMaxSize().padding(start = contentStart),
+            Modifier
+                .fillMaxSize()
+                .padding(start = if (slide.wide) 0.dp else OntDimens.NavRailWidth)
+                .graphicsLayer {
+                    translationX = if (slide.wide) OntDimens.NavRailWidth.toPx() * (1f - slide.progress.value) else 0f
+                },
             content = content,
         )
-        if (!railVisible) return@Box
+        if (!railVisible && !railShown) return@Box
         if (expanded) {
             Box(Modifier.fillMaxSize().zIndex(1f).background(Color.Black.copy(alpha = 0.6f)))
         }
@@ -100,6 +105,7 @@ fun OntNavRailScaffold(
             modifier =
                 Modifier
                     .zIndex(2f)
+                    .graphicsLayer { translationX = -OntDimens.NavRailWidth.toPx() * slide.progress.value }
                     .width(width)
                     .fillMaxHeight()
                     .background(c.background)
