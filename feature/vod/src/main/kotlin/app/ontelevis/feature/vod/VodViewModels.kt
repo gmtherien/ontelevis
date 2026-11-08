@@ -86,6 +86,9 @@ enum class VodSort {
     /** Release year, most recent first. */
     NEWEST,
     OLDEST,
+
+    /** Rating (stars), best first; unrated last. */
+    TOP_RATED,
     A_TO_Z,
     Z_TO_A,
     RANDOM,
@@ -237,6 +240,10 @@ class VodBrowseViewModel
                     list.sortedWith(
                         compareBy<VodItem> { it.year == null }.thenBy { it.year }.then(byTitle),
                     )
+                }
+
+                VodSort.TOP_RATED -> {
+                    list.sortedWith(compareBy<VodItem> { it.rating <= 0 }.thenByDescending { it.rating }.then(byTitle))
                 }
 
                 VodSort.A_TO_Z -> {

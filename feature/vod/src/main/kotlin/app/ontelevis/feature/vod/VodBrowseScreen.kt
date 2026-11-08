@@ -123,7 +123,11 @@ fun VodBrowseScreen(
     // Poster mode (like the guide): while the posters have the focus, the rail and the categories
     // slide away. A poster's menu keeps the mode.
     var gridFocused by remember { mutableStateOf(false) }
-    val posterMode = tv && (gridFocused || menuItem != null)
+    var searchFocused by remember { mutableStateOf(false) }
+    var sortFocused by remember { mutableStateOf(false) }
+    // The search and sort bar belong to the posters, not to a category: the categories stay hidden
+    // while it has the focus (they come back when Left or Back goes to them).
+    val posterMode = tv && (gridFocused || menuItem != null || searchFocused || sortFocused || sortMenu)
     val latestOnPosterMode by rememberUpdatedState(onPosterModeChange)
     LaunchedEffect(posterMode) { latestOnPosterMode(posterMode) }
     DisposableEffect(Unit) { onDispose { latestOnPosterMode(false) } }
@@ -306,9 +310,17 @@ fun VodBrowseScreen(
                             ),
                         imeAction = ImeAction.Search,
                         onLeft = { scope.launch { focusCategory() } },
-                        modifier = Modifier.weight(1f, fill = false).width(380.dp).focusRequester(searchFocus),
+                        modifier =
+                            Modifier
+                                .weight(1f, fill = false)
+                                .width(380.dp)
+                                .focusRequester(searchFocus)
+                                .onFocusChanged { searchFocused = it.hasFocus },
                     )
-                    OntSecondaryButton(onClick = { sortMenu = true }) {
+                    OntSecondaryButton(
+                        onClick = { sortMenu = true },
+                        modifier = Modifier.onFocusChanged { sortFocused = it.hasFocus },
+                    ) {
                         Icon(
                             painterResource(DesignR.drawable.ont_ic_list_bullets),
                             contentDescription = null,
@@ -544,6 +556,7 @@ private val VodSort.label: Int
             VodSort.PROVIDER -> R.string.vod_sort_provider
             VodSort.NEWEST -> R.string.vod_sort_newest
             VodSort.OLDEST -> R.string.vod_sort_oldest
+            VodSort.TOP_RATED -> R.string.vod_sort_top_rated
             VodSort.A_TO_Z -> R.string.vod_sort_a_z
             VodSort.Z_TO_A -> R.string.vod_sort_z_a
             VodSort.RANDOM -> R.string.vod_sort_random

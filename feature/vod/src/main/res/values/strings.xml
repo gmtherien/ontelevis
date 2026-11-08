@@ -43,6 +43,7 @@
     <string name="vod_sort_provider">Provider order</string>
     <string name="vod_sort_newest">Newest first</string>
     <string name="vod_sort_oldest">Oldest first</string>
+    <string name="vod_sort_top_rated">Best rated first</string>
     <string name="vod_sort_a_z">Title A → Z</string>
     <string name="vod_sort_z_a">Title Z → A</string>
     <string name="vod_sort_random">Random</string>

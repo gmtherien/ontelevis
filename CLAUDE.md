@@ -33,7 +33,7 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   Resume points in `watch_progress` (saved every 10 s and on exit; >= 95 % = finished).
   Search: `searchKey` column (`searchKeyOf`: lower case, no accents) filled on import, LIKE across
   all categories of a kind (enabled playlists, max 500); rows without a key fall back to the name.
-  Sort per kind in `VodPrefs` (provider, newest/oldest year, A-Z/Z-A ignoring "4K: " / "FR| " tags,
+  Sort per kind in `VodPrefs` (provider, newest/oldest year, best rated, A-Z/Z-A ignoring "4K: " / "FR| " tags,
   random with a per-screen seed), applied in `VodBrowseViewModel`.
 - Catch-up (Xtream only): `tv_archive_duration` -> `channel.catchupDays`; panel time zone from
   `server_info.timezone` (`playlist.serverTimezone`, UTC if missing). Link
