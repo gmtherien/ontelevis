@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -235,7 +236,8 @@ private fun PadKey(
             ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
     ) {
-        Box(Modifier.padding(4.dp), contentAlignment = Alignment.Center) {
+        // Fills the key so the digit / icon sits in its middle.
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 when (label) {
                     ERASE -> "⌫"
