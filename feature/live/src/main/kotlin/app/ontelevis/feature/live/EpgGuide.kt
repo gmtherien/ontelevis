@@ -3,7 +3,6 @@ package app.ontelevis.feature.live
 import android.text.format.DateFormat
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -55,12 +54,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -516,44 +513,10 @@ private fun Block(
     val viewEnd = scroll + timeline.viewport - inset
     val shownStart = maxOf(start, viewStart).coerceAtMost(end - 6.dp)
     val restWidth = minOf(end, maxOf(viewEnd, shownStart + 6.dp)) - shownStart
-    // A short programme cannot show its title: when focused, the block widens just enough for its
-    // title and times (capped), over its neighbours, and stays inside the visible part.
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val titleStyle = OntTheme.type.itemStrong
-    val subtitleStyle = OntTheme.type.meta
-    val contentWidth =
-        if (!focused) {
-            0.dp
-        } else {
-            remember(title, subtitle, playing) {
-                with(density) {
-                    val titleWidth =
-                        measurer
-                            .measure(title, titleStyle, maxLines = 1)
-                            .size.width
-                            .toDp()
-                    val subtitleWidth =
-                        measurer
-                            .measure(subtitle, subtitleStyle, maxLines = 1)
-                            .size.width
-                            .toDp()
-                    // 12 dp padding each side, plus the "playing" dot before the title.
-                    maxOf(titleWidth + if (playing || replayable) 18.dp else 0.dp, subtitleWidth) + 24.dp + 2.dp
-                }
-            }
-        }
-    val targetWidth =
-        if (focused) {
-            maxOf(
-                restWidth,
-                minOf(contentWidth, EXPANDED_MAX_WIDTH, timeline.viewport - inset * 2),
-            )
-        } else {
-            restWidth
-        }
-    val shownWidth by animateDpAsState(targetWidth, tween(OntMotion.FOCUS_ANIM_MS), label = "block-width")
-    val left = shownStart.coerceAtMost(viewEnd - shownWidth).coerceAtLeast(minOf(shownStart, viewStart))
+    // Blocks keep their real width when focused: the info panel above the guide shows the focused
+    // programme's title and times (the earlier "widen on focus" covered the neighbouring blocks).
+    val shownWidth = restWidth
+    val left = shownStart
     EpgProgramBlock(
         title = title,
         subtitle = subtitle,
@@ -607,9 +570,6 @@ private fun Block(
                 },
     )
 }
-
-/** Widest a focused short programme grows to show its title. */
-private val EXPANDED_MAX_WIDTH = 280.dp
 
 /** Visible part of a programme in the window as (start, end) fractions, or null. */
 private fun visibleSpan(
