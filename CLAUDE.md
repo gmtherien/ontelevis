@@ -6,7 +6,7 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
 
 ## Commands
 - JDK 17 + Android SDK (`~/Library/Android/sdk`, platform 37). Env vars are in `~/.zshrc`.
-- `./gradlew assembleDebug` — debug APK (`app/build/outputs/apk/debug/`), id `app.ontelevis.debug`.
+- `./gradlew assembleDebug` — debug APK (`app/build/outputs/apk/debug/`), id `com.ontelevis.app.debug`.
 - `./gradlew test` — JVM unit tests (JUnit 6, parsers).
 - `./gradlew spotlessCheck` / `spotlessApply` — ktlint formatting.
 - `./gradlew lintDebug` — Android lint (HardcodedText and MissingTranslation are errors).
@@ -56,6 +56,9 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   if one is set. Files (`BackupFiles`): phone = system picker; TV (no picker, Android TV ships only
   `com.android.tv.frameworkpackagestubs`) = Download/Ontelevis via MediaStore (storage permission
   before Android 10). Android 10+ only lists files this install wrote (not after a reinstall).
+- App id `com.ontelevis.app` (debug `.debug`) since 2026-11-08 (owner bought ontelevis.com); betas
+  1.0.0-beta.1 to beta.5 were `app.ontelevis` and cannot update to it (manual reinstall once).
+  Never change the id again. `namespace` / Kotlin packages deliberately stay `app.ontelevis.*`.
 - Releases (owner chose GitHub Actions signing): tag `vX.Y.Z` -> `release.yml` builds `assembleRelease`
   signed from secrets `ONTELEVIS_KEYSTORE_BASE64/_PASSWORD`, `ONTELEVIS_KEY_ALIAS/_PASSWORD`,
   versionName from the tag, versionCode = 100 + run number, checks with apksigner, publishes the

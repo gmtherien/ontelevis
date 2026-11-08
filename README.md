@@ -47,7 +47,8 @@ Shared Gradle configuration lives in `build-logic/` (convention plugins); versio
 
 Pushing a tag `v1.2.3` (or `v1.2.3-beta.1` for a pre-release) runs `.github/workflows/release.yml`:
 tests, signed release build (R8), signature check, and a GitHub release with `ontelevis.apk`.
-The newest stable APK is always at
+Android app id: `com.ontelevis.app` (1.0.0-beta.1 to beta.5 used `app.ontelevis`: uninstall that one
+after installing a newer version). The newest stable APK is always at
 `https://github.com/gmtherien/ontelevis/releases/latest/download/ontelevis.apk`.
 
 Installed release builds check GitHub at each start and offer the newest release (stable only,

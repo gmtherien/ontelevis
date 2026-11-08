@@ -9,7 +9,9 @@ android {
     namespace = "app.ontelevis"
 
     defaultConfig {
-        applicationId = "app.ontelevis"
+        // Reversed ontelevis.com (owner's domain). Never change it again: a new id is a new app
+        // (installs do not update, data does not follow). The Kotlin packages stay app.ontelevis.*.
+        applicationId = "com.ontelevis.app"
         // The release workflow passes both from the tag and the run number (-PversionName / -PversionCode);
         // local builds keep these.
         versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 1
