@@ -2,6 +2,8 @@ package app.ontelevis.feature.vod
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -24,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,10 +40,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -67,6 +73,7 @@ import app.ontelevis.core.designsystem.component.OntTextField
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.SectionLabel
 import app.ontelevis.core.designsystem.theme.OntDimens
+import app.ontelevis.core.designsystem.theme.OntMotion
 import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.VodCategory
 import app.ontelevis.core.model.VodKind
@@ -86,6 +93,8 @@ fun VodBrowseScreen(
     kind: VodKind,
     onOpen: (id: String) -> Unit,
     modifier: Modifier = Modifier,
+    /** True while the posters have the focus: the shell hides its rail so they get the width. */
+    onPosterModeChange: (Boolean) -> Unit = {},
     viewModel: VodBrowseViewModel = hiltViewModel(key = kind.name),
 ) {
     LaunchedEffect(kind) { viewModel.setKind(kind) }
@@ -110,6 +119,19 @@ fun VodBrowseScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuItem by remember { mutableStateOf<VodItem?>(null) }
+    val searchFocus = remember { FocusRequester() }
+    // Poster mode (like the guide): while the posters have the focus, the rail and the categories
+    // slide away. A poster's menu keeps the mode.
+    var gridFocused by remember { mutableStateOf(false) }
+    val posterMode = tv && (gridFocused || menuItem != null)
+    val latestOnPosterMode by rememberUpdatedState(onPosterModeChange)
+    LaunchedEffect(posterMode) { latestOnPosterMode(posterMode) }
+    DisposableEffect(Unit) { onDispose { latestOnPosterMode(false) } }
+    val panelWidth by animateDpAsState(
+        targetValue = if (posterMode) 0.dp else OntDimens.CategoryPanelWidth,
+        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
+        label = "vod-categories-width",
+    )
     val latestItems by rememberUpdatedState(itemsState)
 
     // Category whose posters should take the focus once they are on screen (OK on a category).
@@ -168,66 +190,77 @@ fun VodBrowseScreen(
 
     Row(modifier.fillMaxSize().background(c.background)) {
         if (tv) {
-            Column(
-                Modifier
-                    .width(OntDimens.CategoryPanelWidth)
-                    .fillMaxHeight()
-                    .drawBehind {
-                        drawLine(c.line, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx())
-                    }.padding(start = 16.dp, end = 16.dp, top = OntDimens.SafeVertical),
-            ) {
-                Text(
-                    title,
-                    style = OntTheme.type.title,
-                    color = c.textPrimary,
-                    modifier = Modifier.padding(start = 10.dp),
-                )
-                Spacer(Modifier.height(24.dp))
-                LazyColumn(
-                    state = categoryList,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
+            // The panel keeps its width and slides out to the left (its rows stay laid out, so the
+            // focus can come back to the selected category at once).
+            Box(Modifier.width(panelWidth).fillMaxHeight().clipToBounds()) {
+                Column(
+                    Modifier
+                        .wrapContentWidth(Alignment.End, unbounded = true)
+                        .width(OntDimens.CategoryPanelWidth)
+                        .fillMaxHeight()
+                        .drawBehind {
+                            drawLine(c.line, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx())
+                        }.padding(start = 16.dp, end = 16.dp, top = OntDimens.SafeVertical),
                 ) {
-                    itemsIndexed(state.categories, key = {
-                        _,
-                        it,
-                        ->
-                        "${it.playlistId}/${it.name}"
-                    }) { index, category ->
-                        val selected = category.key == state.selected?.key
-                        // The "Categories" label sits above the first provider category (under Favourites).
-                        if (!category.isFavorites && state.categories.getOrNull(index - 1)?.isFavorites != false) {
-                            SectionLabel(
-                                stringResource(R.string.vod_categories),
-                                Modifier.padding(start = 10.dp, top = if (index > 0) 12.dp else 0.dp, bottom = 8.dp),
+                    Text(
+                        title,
+                        style = OntTheme.type.title,
+                        color = c.textPrimary,
+                        modifier = Modifier.padding(start = 10.dp),
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    LazyColumn(
+                        state = categoryList,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
+                    ) {
+                        itemsIndexed(state.categories, key = {
+                            _,
+                            it,
+                            ->
+                            "${it.playlistId}/${it.name}"
+                        }) { index, category ->
+                            val selected = category.key == state.selected?.key
+                            // The "Categories" label sits above the first provider category (under Favourites).
+                            val firstProvider =
+                                !category.isFavorites && state.categories.getOrNull(index - 1)?.isFavorites != false
+                            if (firstProvider) {
+                                SectionLabel(
+                                    stringResource(R.string.vod_categories),
+                                    Modifier.padding(
+                                        start = 10.dp,
+                                        top = if (index > 0) 12.dp else 0.dp,
+                                        bottom = 8.dp,
+                                    ),
+                                )
+                            }
+                            OntListItem(
+                                leadingIcon =
+                                    if (category.isFavorites) {
+                                        { tint ->
+                                            Icon(
+                                                painterResource(DesignR.drawable.ont_ic_star),
+                                                contentDescription = null,
+                                                tint = tint,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                text = categoryLabel(category),
+                                selected = selected,
+                                onClick = {
+                                    viewModel.select(category)
+                                    viewModel.setQuery("")
+                                    gridFocusFor = category.key
+                                },
+                                modifier =
+                                    Modifier
+                                        .focusProperties { if (items.isNotEmpty()) right = gridEntry }
+                                        .then(if (selected) Modifier.focusRequester(categoryFocus) else Modifier),
                             )
                         }
-                        OntListItem(
-                            leadingIcon =
-                                if (category.isFavorites) {
-                                    { tint ->
-                                        Icon(
-                                            painterResource(DesignR.drawable.ont_ic_star),
-                                            contentDescription = null,
-                                            tint = tint,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
-                            text = categoryLabel(category),
-                            selected = selected,
-                            onClick = {
-                                viewModel.select(category)
-                                viewModel.setQuery("")
-                                gridFocusFor = category.key
-                            },
-                            modifier =
-                                Modifier
-                                    .focusProperties { if (items.isNotEmpty()) right = gridEntry }
-                                    .then(if (selected) Modifier.focusRequester(categoryFocus) else Modifier),
-                        )
                     }
                 }
             }
@@ -264,11 +297,16 @@ fun VodBrowseScreen(
                         label = "",
                         placeholder =
                             stringResource(
-                                if (kind == VodKind.MOVIE) R.string.vod_search_movies else R.string.vod_search_series,
+                                when {
+                                    kind == VodKind.MOVIE && tv -> R.string.vod_search_movies_tv
+                                    kind == VodKind.MOVIE -> R.string.vod_search_movies
+                                    tv -> R.string.vod_search_series_tv
+                                    else -> R.string.vod_search_series
+                                },
                             ),
                         imeAction = ImeAction.Search,
                         onLeft = { scope.launch { focusCategory() } },
-                        modifier = Modifier.weight(1f, fill = false).width(380.dp),
+                        modifier = Modifier.weight(1f, fill = false).width(380.dp).focusRequester(searchFocus),
                     )
                     OntSecondaryButton(onClick = { sortMenu = true }) {
                         Icon(
@@ -337,6 +375,7 @@ fun VodBrowseScreen(
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                         contentPadding = PaddingValues(top = 6.dp, bottom = OntDimens.SafeVertical),
+                        modifier = Modifier.onFocusChanged { gridFocused = it.hasFocus },
                     ) {
                         itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
                             OntPosterCard(
@@ -376,11 +415,27 @@ fun VodBrowseScreen(
                                                 gridState.layoutInfo.visibleItemsInfo
                                                     .firstOrNull { it.index == index }
                                                     ?.column == 0
-                                            if (tv && firstColumn && event.key == Key.DirectionLeft) {
-                                                if (event.type == KeyEventType.KeyDown) scope.launch { focusCategory() }
-                                                true
-                                            } else {
-                                                false
+                                            // Holding Up jumps to the search field (no climbing the whole grid).
+                                            val heldUp =
+                                                event.key == Key.DirectionUp &&
+                                                    event.type == KeyEventType.KeyDown &&
+                                                    event.nativeKeyEvent.repeatCount > 0
+                                            when {
+                                                tv && heldUp -> {
+                                                    runCatching { searchFocus.requestFocus() }
+                                                    true
+                                                }
+
+                                                tv && firstColumn && event.key == Key.DirectionLeft -> {
+                                                    if (event.type == KeyEventType.KeyDown) {
+                                                        scope.launch { focusCategory() }
+                                                    }
+                                                    true
+                                                }
+
+                                                else -> {
+                                                    false
+                                                }
                                             }
                                         },
                             )
@@ -401,8 +456,11 @@ fun VodBrowseScreen(
             onDismiss = { sortMenu = false },
         )
     }
-    // Back while a search is shown: the category comes back (the field is emptied).
-    BackHandler(enabled = searching) { viewModel.setQuery("") }
+    // Back from the posters: the selected category (the search, if any, is emptied).
+    BackHandler(enabled = searching || posterMode) {
+        if (searching) viewModel.setQuery("")
+        scope.launch { focusCategory() }
+    }
 
     menuItem?.let { item ->
         val favorite = item.id in state.favoriteIds

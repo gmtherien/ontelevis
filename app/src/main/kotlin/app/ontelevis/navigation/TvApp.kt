@@ -76,8 +76,9 @@ fun TvApp() {
     val updating = stringResource(R.string.content_update_started)
     val railEntry = remember { FocusRequester() }
     var railFocused by remember { mutableStateOf(false) }
-    // Guide mode on the TV screen: the guide has the focus and takes the whole width (rail hidden).
-    var liveGuideMode by remember { mutableStateOf(false) }
+    // Guide / poster mode: the guide (TV) or the posters (Movies, Series) have the focus and take the
+    // whole width (rail hidden).
+    var wideContent by remember { mutableStateOf(false) }
     // Back climbs one level before leaving: from a destination's content up to the rail.
     BackHandler(enabled = !railFocused && destination?.isRailTop() == true) { runCatching { railEntry.requestFocus() } }
 
@@ -119,8 +120,7 @@ fun TvApp() {
         selectedKey = selected,
         entryRequester = railEntry,
         onRailFocusChanged = { railFocused = it },
-        railVisible =
-            destination?.isPlayer() != true && !(liveGuideMode && destination?.hasRoute(LiveRoute::class) == true),
+        railVisible = destination?.isPlayer() != true && !(wideContent && destination?.isRailTop() == true),
         onSelect = { item ->
             val key = item.key as RailKey
             if (key == RailKey.UPDATE) {
@@ -146,7 +146,7 @@ fun TvApp() {
                 LiveScreen(
                     onAddPlaylist = { navController.navigate(AddPlaylistRoute) },
                     onOpenFullscreen = { navController.navigate(PlayerRoute) },
-                    onGuideModeChange = { liveGuideMode = it },
+                    onGuideModeChange = { wideContent = it },
                     onOpenCatchup = { channelId, start, stop, title ->
                         navController.navigate(
                             VodPlayerRoute(
@@ -161,7 +161,7 @@ fun TvApp() {
                 )
             }
             composable<PlayerRoute> { PlayerScreen() }
-            vodDestinations(navController)
+            vodDestinations(navController, onPosterModeChange = { wideContent = it })
             composable<SettingsRoute> { SettingsScreen(onAddPlaylist = { navController.navigate(AddPlaylistRoute) }) }
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
         }
@@ -169,12 +169,23 @@ fun TvApp() {
 }
 
 /** Movies, series, their pages and the VOD player (shared by the TV and phone shells). */
-internal fun androidx.navigation.NavGraphBuilder.vodDestinations(navController: NavHostController) {
+internal fun androidx.navigation.NavGraphBuilder.vodDestinations(
+    navController: NavHostController,
+    onPosterModeChange: (Boolean) -> Unit = {},
+) {
     composable<MoviesRoute> {
-        VodBrowseScreen(VodKind.MOVIE, onOpen = { navController.navigate(MovieRoute(it)) })
+        VodBrowseScreen(
+            VodKind.MOVIE,
+            onOpen = { navController.navigate(MovieRoute(it)) },
+            onPosterModeChange = onPosterModeChange,
+        )
     }
     composable<SeriesListRoute> {
-        VodBrowseScreen(VodKind.SERIES, onOpen = { navController.navigate(SeriesRoute(it)) })
+        VodBrowseScreen(
+            VodKind.SERIES,
+            onOpen = { navController.navigate(SeriesRoute(it)) },
+            onPosterModeChange = onPosterModeChange,
+        )
     }
     composable<MovieRoute> {
         MovieScreen(onPlay = { id, fromStart -> navController.navigate(VodPlayerRoute(id, fromStart)) })

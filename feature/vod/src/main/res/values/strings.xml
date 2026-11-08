@@ -32,6 +32,8 @@
     <string name="vod_menu_remove_favorite">Remove from favourites</string>
     <string name="vod_favorite_added">Added to favourites</string>
     <string name="vod_favorite_removed">Removed from favourites</string>
+    <string name="vod_search_movies_tv">Search (hold ▲)</string>
+    <string name="vod_search_series_tv">Search (hold ▲)</string>
     <string name="vod_search_movies">Search movies</string>
     <string name="vod_search_series">Search series</string>
     <string name="vod_search_crumb">Search: %s</string>
