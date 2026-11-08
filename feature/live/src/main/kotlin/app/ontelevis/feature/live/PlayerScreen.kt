@@ -158,7 +158,6 @@ private fun InfoBar(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(channel.number.toString(), style = OntTheme.type.clock, color = c.textMuted)
             ChannelLogoTile(parsed.initials, size = OntDimens.InfoLogoTile, logoUrl = channel.logoUrl)
             Column(Modifier.weight(1f)) {
                 parsed.group?.let { Text(it, style = OntTheme.type.meta, color = c.textMuted) }

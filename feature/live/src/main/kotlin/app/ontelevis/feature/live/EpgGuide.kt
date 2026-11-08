@@ -324,14 +324,6 @@ private fun GuideRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                channel.number.toString(),
-                style = OntTheme.type.time,
-                color = c.textTertiary,
-                maxLines = 1,
-                // Wide enough for 5-digit numbers (big Xtream panels).
-                modifier = Modifier.width(38.dp),
-            )
             ChannelLogoTile(parsed.initials, logoUrl = channel.logoUrl)
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

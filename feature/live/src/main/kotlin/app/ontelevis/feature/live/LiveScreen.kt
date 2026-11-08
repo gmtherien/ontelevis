@@ -834,7 +834,6 @@ private fun PhoneLive(
                                     },
                                 ),
                             headlineContent = { PhoneText(parsed.title) },
-                            leadingContent = { PhoneText(channel.number.toString()) },
                             // What is on now, from the guide, else the quality tags.
                             supportingContent =
                                 (

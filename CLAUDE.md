@@ -51,8 +51,10 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   Icons: Phosphor regular as vector drawables `ont_ic_*` (MIT, third_party/icons).
 - Owner choices that differ from the handoff: category names are shown raw (emoji and prefixes
   kept, provider order); no "Full screen" button (2nd OK on the playing channel, or OK on the
-  preview); OK on a category moves focus into the guide.
-- Rail shows V1 destinations only (TV, Update content, Settings); Home, Search, Movies, Series,
+  preview); OK on a category moves focus into the guide; no channel numbers anywhere (guide,
+  player, phone list); guide mode: while the guide has focus, rail and categories slide away and
+  the info panel follows the focused programme (TiviMate-like).
+- Rail shows V1 destinations only (TV, Movies, Series, Update content, Settings); Home, Search,
   Multiview, Sports from the mockup are out of V1.
 
 ## Rules
