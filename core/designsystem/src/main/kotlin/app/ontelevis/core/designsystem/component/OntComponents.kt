@@ -165,6 +165,8 @@ fun OntListItem(
     onLongClick: (() -> Unit)? = null,
     /** Shown faded (e.g. a hidden category while hidden ones are listed). */
     dimmed: Boolean = false,
+    /** Padlock at the end (a category locked by the parental PIN). */
+    locked: Boolean = false,
 ) {
     val c = OntTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -231,6 +233,14 @@ fun OntListItem(
                 modifier = Modifier.weight(1f),
             )
             if (trailingTag != null) OntTag(trailingTag, onFocusedParent = focused)
+            if (locked) {
+                Icon(
+                    painterResource(R.drawable.ont_ic_lock),
+                    contentDescription = null,
+                    tint = if (focused) c.onFocus else c.textMuted,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
     }
 }

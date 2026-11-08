@@ -31,6 +31,11 @@
     <string name="settings_field_epg">Programme guide link (optional)</string>
     <string name="settings_field_epg_hint">Taken from the playlist when empty</string>
     <string name="settings_guide_failed">guide unavailable</string>
+    <string name="settings_parental">Parental control</string>
+    <string name="settings_parental_help">With a PIN, hold OK on a category (TV, Movies, Series) to lock it.</string>
+    <string name="settings_pin_create">Create a parental PIN</string>
+    <string name="settings_pin_change">Change the PIN</string>
+    <string name="settings_pin_remove">Remove the PIN</string>
     <plurals name="settings_channel_count">
         <item quantity="one">%d channel</item>
         <item quantity="other">%d channels</item>

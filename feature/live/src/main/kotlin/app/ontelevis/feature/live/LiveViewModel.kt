@@ -3,8 +3,11 @@ package app.ontelevis.feature.live
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import app.ontelevis.core.data.CategoryKind
+import app.ontelevis.core.data.CategoryRef
 import app.ontelevis.core.data.ChannelRepository
 import app.ontelevis.core.data.EpgRepository
+import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.PlaybackPrefs
 import app.ontelevis.core.data.PlaylistRepository
 import app.ontelevis.core.model.Channel
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -51,6 +55,10 @@ data class LiveUiState(
     val showHidden: Boolean = false,
     val selectedGroup: ChannelGroup? = null,
     val favoriteIds: Set<String> = emptySet(),
+    /** Categories locked by the parental PIN (padlock), and those still closed this session. */
+    val lockedKeys: Set<Pair<Long, String>> = emptySet(),
+    val closedKeys: Set<Pair<Long, String>> = emptySet(),
+    val hasPin: Boolean = false,
 )
 
 /**
@@ -66,6 +74,8 @@ data class GuideProgrammes(
 data class GroupChannels(
     val groupKey: Pair<Long, String>? = null,
     val list: List<Channel> = emptyList(),
+    /** The category is locked and the PIN was not entered: no channels shown. */
+    val locked: Boolean = false,
 )
 
 @HiltViewModel
@@ -77,11 +87,23 @@ class LiveViewModel
         private val epgRepository: EpgRepository,
         private val livePlayer: LivePlayer,
         private val prefs: PlaybackPrefs,
+        private val parental: ParentalControl,
     ) : ViewModel() {
         private val selectedKey = MutableStateFlow<Pair<Long, String>?>(null)
         private val showHidden = MutableStateFlow(false)
-        private val favorites = channelRepository.observeFavorites()
-        private val history = channelRepository.observeHistory()
+
+        private val lockedLive: Flow<Set<Pair<Long, String>>> = parental.locked.map { it.liveKeys() }
+        private val closedLive: Flow<Set<Pair<Long, String>>> = parental.closed.map { it.liveKeys() }
+
+        // Channels of closed categories stay out of the shortcuts.
+        private val favorites =
+            combine(channelRepository.observeFavorites(), closedLive) { list, closed ->
+                list.filter { (it.playlistId to it.group) !in closed }
+            }
+        private val history =
+            combine(channelRepository.observeHistory(), closedLive) { list, closed ->
+                list.filter { (it.playlistId to it.group) !in closed }
+            }
 
         private val shortcuts: Flow<List<ChannelGroup>> =
             combine(favorites, history) { fav, hist ->
@@ -93,8 +115,17 @@ class LiveViewModel
                 playlistRepository.observePlaylists(),
                 channelRepository.observeGroups(),
                 shortcuts,
-                combine(selectedKey, showHidden, channelRepository.observeFavoriteIds()) { a, b, c -> Triple(a, b, c) },
-            ) { playlists, all, shortcuts, (key, showHidden, favoriteIds) ->
+                combine(
+                    combine(
+                        selectedKey,
+                        showHidden,
+                        channelRepository.observeFavoriteIds(),
+                    ) { a, b, c -> Triple(a, b, c) },
+                    combine(lockedLive, closedLive, parental.hasPin) { a, b, c -> Triple(a, b, c) },
+                ) { a, b -> a to b },
+            ) { playlists, all, shortcuts, (selection, locks) ->
+                val (key, showHidden, favoriteIds) = selection
+                val (lockedKeys, closedKeys, hasPin) = locks
                 val hiddenCount = all.count { it.hidden }
                 val shown = if (showHidden || hiddenCount == 0) all else all.filter { !it.hidden }
                 val selected =
@@ -111,22 +142,30 @@ class LiveViewModel
                     showHidden = showHidden && hiddenCount > 0,
                     selectedGroup = selected,
                     favoriteIds = favoriteIds,
+                    lockedKeys = lockedKeys,
+                    closedKeys = closedKeys,
+                    hasPin = hasPin,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveUiState())
 
         @OptIn(ExperimentalCoroutinesApi::class)
         val channels: StateFlow<GroupChannels> =
-            state
-                .map { it.selectedGroup }
-                // Channel counts change on refresh; only a different group means new channels.
-                .distinctUntilChangedBy { it?.key }
-                .flatMapLatest { group ->
+            combine(
+                state
+                    .map { it.selectedGroup }
+                    // Channel counts change on refresh; only a different group means new channels.
+                    .distinctUntilChangedBy { it?.key },
+                closedLive,
+            ) { group, closed -> group to (group?.key in closed) }
+                .distinctUntilChangedBy { (group, closed) -> group?.key to closed }
+                .flatMapLatest { (group, closed) ->
                     when {
-                        group == null -> flowOf(emptyList())
-                        group.shortcut == Shortcut.FAVORITES -> favorites
-                        group.shortcut == Shortcut.HISTORY -> history
-                        else -> channelRepository.observeChannels(group)
-                    }.map { GroupChannels(group?.key, it) }
+                        group == null -> flowOf(GroupChannels())
+                        closed -> flowOf(GroupChannels(group.key, locked = true))
+                        group.shortcut == Shortcut.FAVORITES -> favorites.map { GroupChannels(group.key, it) }
+                        group.shortcut == Shortcut.HISTORY -> history.map { GroupChannels(group.key, it) }
+                        else -> channelRepository.observeChannels(group).map { GroupChannels(group.key, it) }
+                    }
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GroupChannels())
 
         val live: StateFlow<LiveState> = livePlayer.state
@@ -199,6 +238,12 @@ class LiveViewModel
                     .distinctUntilChanged()
                     .collect { prefs.lastChannelId = it }
             }
+            // A channel of a category that locks again (the app went to the background) stops.
+            viewModelScope.launch {
+                combine(livePlayer.state.map { it.channel }, closedLive) { channel, closed ->
+                    channel != null && (channel.playlistId to channel.group) in closed
+                }.collect { lockedNow -> if (lockedNow) livePlayer.stop() }
+            }
             // ...and add it to the History shortcut.
             viewModelScope.launch {
                 livePlayer.state
@@ -249,6 +294,20 @@ class LiveViewModel
             viewModelScope.launch { channelRepository.setGroupHidden(group, hidden) }
         }
 
+        fun checkPin(pin: String): Boolean = parental.checkPin(pin)
+
+        fun setPin(pin: String) = parental.setPin(pin)
+
+        /** The PIN was entered for [group]: open it for this session. */
+        fun unlock(group: ChannelGroup) = parental.unlock(group.lockRef())
+
+        fun setLocked(
+            group: ChannelGroup,
+            locked: Boolean,
+        ) {
+            viewModelScope.launch { parental.setLocked(group.lockRef(), locked) }
+        }
+
         fun toggleShowHidden() {
             showHidden.value = !showHidden.value
         }
@@ -263,6 +322,8 @@ class LiveViewModel
             val id = prefs.lastChannelId ?: return
             viewModelScope.launch {
                 val channel = channelRepository.channel(id) ?: return@launch
+                // A locked category does not open (nor play) without the PIN.
+                if ((channel.playlistId to channel.group) in closedLive.first()) return@launch
                 selectedKey.value = channel.playlistId to channel.group
                 livePlayer.play(channel, channelRepository.channelsAround(channel))
             }
@@ -306,6 +367,11 @@ class PlayerViewModel
     }
 
 internal val ChannelGroup.key: Pair<Long, String> get() = playlistId to name
+
+private fun ChannelGroup.lockRef() = CategoryRef(CategoryKind.LIVE, playlistId, name)
+
+private fun Set<CategoryRef>.liveKeys(): Set<Pair<Long, String>> =
+    filter { it.kind == CategoryKind.LIVE }.map { it.playlistId to it.name }.toSet()
 
 /** The guide loads 8 h (half an hour back, 7.5 h ahead) and scrolls sideways through it. */
 private val GUIDE_SPAN: Duration = Duration.ofHours(8)

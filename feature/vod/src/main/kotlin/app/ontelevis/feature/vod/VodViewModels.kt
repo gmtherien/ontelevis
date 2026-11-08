@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import androidx.navigation.toRoute
+import app.ontelevis.core.data.CategoryKind
+import app.ontelevis.core.data.CategoryRef
 import app.ontelevis.core.data.ChannelRepository
+import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.PlaylistRepository
 import app.ontelevis.core.data.VodPrefs
 import app.ontelevis.core.data.VodRepository
@@ -59,12 +62,17 @@ data class VodItem(
     val year: Int?,
     val rating: Double,
     val progress: Float?,
+    /** Its provider category (parental locks apply to it in Favourites and search too). */
+    val playlistId: Long = 0,
+    val group: String = "",
 )
 
 /** The posters of one category; [categoryKey] tells which, so focus waits for the right list. */
 data class VodItems(
     val categoryKey: Pair<Long, String>? = null,
     val list: List<VodItem> = emptyList(),
+    /** The category is locked and the PIN was not entered: no posters shown. */
+    val locked: Boolean = false,
 )
 
 data class VodBrowseState(
@@ -76,6 +84,10 @@ data class VodBrowseState(
     val hasProviderCategories: Boolean = false,
     val selected: VodCategory? = null,
     val favoriteIds: Set<String> = emptySet(),
+    /** Categories locked by the parental PIN (padlock), and those still closed this session. */
+    val lockedKeys: Set<Pair<Long, String>> = emptySet(),
+    val closedKeys: Set<Pair<Long, String>> = emptySet(),
+    val hasPin: Boolean = false,
 )
 
 /** How the posters of a category (or of a search) are ordered. */
@@ -102,8 +114,17 @@ class VodBrowseViewModel
         playlists: PlaylistRepository,
         private val vod: VodRepository,
         private val prefs: VodPrefs,
+        private val parental: ParentalControl,
     ) : ViewModel() {
         private val kind = MutableStateFlow<VodKind?>(null)
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val lockedKeys: Flow<Set<Pair<Long, String>>> =
+            kind.flatMapLatest { k -> parental.locked.map { it.keysOf(k) } }
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val closedKeys: Flow<Set<Pair<Long, String>>> =
+            kind.flatMapLatest { k -> parental.closed.map { it.keysOf(k) } }
 
         /** Text typed in the search field; 2 characters or more replace the category by results. */
         private val _query = MutableStateFlow("")
@@ -142,9 +163,9 @@ class VodBrowseViewModel
                 playlists.observePlaylists(),
                 categories,
                 favoritesCategory,
-                selectedKey,
-                vod.observeFavoriteIds(),
-            ) { lists, cats, favorites, key, favoriteIds ->
+                combine(selectedKey, vod.observeFavoriteIds()) { a, b -> a to b },
+                combine(lockedKeys, closedKeys, parental.hasPin) { a, b, c -> Triple(a, b, c) },
+            ) { lists, cats, favorites, (key, favoriteIds), (locked, closed, hasPin) ->
                 val all = if (cats.isEmpty() || favorites == null) cats else listOf(favorites) + cats
                 VodBrowseState(
                     playlists = lists,
@@ -153,6 +174,9 @@ class VodBrowseViewModel
                     // Opens on the first provider category, not on Favourites.
                     selected = all.firstOrNull { it.key == key } ?: cats.firstOrNull(),
                     favoriteIds = favoriteIds,
+                    lockedKeys = locked,
+                    closedKeys = closed,
+                    hasPin = hasPin,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodBrowseState())
 
@@ -189,8 +213,24 @@ class VodBrowseViewModel
                 }
 
         val items: StateFlow<VodItems> =
-            combine(unsorted, sort) { items, sort -> items.copy(list = sorted(items.list, sort)) }
-                .flowOn(Dispatchers.Default)
+            combine(unsorted, sort, closedKeys) { items, sort, closed ->
+                when {
+                    items.categoryKey in closed -> {
+                        VodItems(items.categoryKey, locked = true)
+                    }
+
+                    // Favourites and search leave out the titles of closed categories.
+                    closed.isEmpty() -> {
+                        items.copy(list = sorted(items.list, sort))
+                    }
+
+                    else -> {
+                        items.copy(
+                            list = sorted(items.list.filter { (it.playlistId to it.group) !in closed }, sort),
+                        )
+                    }
+                }
+            }.flowOn(Dispatchers.Default)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodItems())
 
         fun setQuery(text: String) {
@@ -276,6 +316,19 @@ class VodBrowseViewModel
             selectedKey.value = category.key
         }
 
+        fun checkPin(pin: String): Boolean = parental.checkPin(pin)
+
+        fun setPin(pin: String) = parental.setPin(pin)
+
+        fun unlock(category: VodCategory) = parental.unlock(category.lockRef())
+
+        fun setLocked(
+            category: VodCategory,
+            locked: Boolean,
+        ) {
+            viewModelScope.launch { parental.setLocked(category.lockRef(), locked) }
+        }
+
         /** Returns true when the title is now a favourite. */
         suspend fun toggleFavorite(id: String): Boolean = vod.toggleFavorite(id, kind.value ?: VodKind.MOVIE)
 
@@ -302,9 +355,17 @@ private val PROVIDER_PREFIX = Regex("^(?:4K|8K|UHD|FHD|HD|SD|[A-Z]{2})\\s*[:|-]\
 /** Title used for alphabetical order: without a provider prefix ("4K: ", "EN - ", "FR| "). */
 internal fun sortTitle(title: String): String = title.replaceFirst(PROVIDER_PREFIX, "")
 
-private fun Movie.toItem(progress: WatchProgress?) = VodItem(id, name, posterUrl, year, rating, progress?.fraction())
+private fun Movie.toItem(progress: WatchProgress?) =
+    VodItem(id, name, posterUrl, year, rating, progress?.fraction(), playlistId, group)
 
-private fun Series.toItem() = VodItem(id, name, posterUrl, year, rating, null)
+private fun Series.toItem() = VodItem(id, name, posterUrl, year, rating, null, playlistId, group)
+
+private fun VodKind.lockKind() = if (this == VodKind.MOVIE) CategoryKind.MOVIE else CategoryKind.SERIES
+
+private fun VodCategory.lockRef() = CategoryRef(kind.lockKind(), playlistId, name)
+
+private fun Set<CategoryRef>.keysOf(kind: VodKind?): Set<Pair<Long, String>> =
+    if (kind == null) emptySet() else filter { it.kind == kind.lockKind() }.map { it.playlistId to it.name }.toSet()
 
 internal fun WatchProgress.fraction(): Float? =
     if (durationMs <= 0 || finished) null else (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)

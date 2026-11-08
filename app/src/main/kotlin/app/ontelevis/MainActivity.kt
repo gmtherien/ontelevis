@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import app.ontelevis.core.data.LanguageSettings
+import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.sync.PlaylistSync
 import app.ontelevis.core.designsystem.component.LocalIsTv
 import app.ontelevis.core.designsystem.theme.OntelevisPhoneTheme
@@ -29,6 +30,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var livePlayer: LivePlayer
 
     @Inject lateinit var vodPlayer: VodPlayer
+
+    @Inject lateinit var parental: ParentalControl
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +58,8 @@ class MainActivity : ComponentActivity() {
         // A movie pauses (it does not reconnect on its own like a live stream).
         vodPlayer.pause()
         livePlayer.suspend()
+        // Locked categories ask for the PIN again when the app comes back.
+        parental.relock()
         super.onStop()
     }
 }

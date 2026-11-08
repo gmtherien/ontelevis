@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.ontelevis.core.data.LanguageSettings
+import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.PlaylistRepository
 import app.ontelevis.core.data.sync.PlaylistSync
 import app.ontelevis.core.model.Playlist
@@ -27,7 +28,16 @@ class SettingsViewModel
     constructor(
         private val repository: PlaylistRepository,
         private val languageSettings: LanguageSettings,
+        private val parental: ParentalControl,
     ) : ViewModel() {
+        val hasPin: StateFlow<Boolean> = parental.hasPin
+
+        fun checkPin(pin: String): Boolean = parental.checkPin(pin)
+
+        fun setPin(pin: String) = parental.setPin(pin)
+
+        fun clearPin() = parental.clearPin()
+
         /** Null while loading. */
         val playlists: StateFlow<List<Playlist>?> =
             repository.observePlaylists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

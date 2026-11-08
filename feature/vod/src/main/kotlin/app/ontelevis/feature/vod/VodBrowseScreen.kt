@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.LocalIsTv
+import app.ontelevis.core.designsystem.component.OntCreatePinDialog
 import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
@@ -71,6 +72,7 @@ import app.ontelevis.core.designsystem.component.OntPosterCard
 import app.ontelevis.core.designsystem.component.OntSecondaryButton
 import app.ontelevis.core.designsystem.component.OntTextField
 import app.ontelevis.core.designsystem.component.OntTopBar
+import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
 import app.ontelevis.core.designsystem.component.SectionLabel
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntMotion
@@ -119,6 +121,8 @@ fun VodBrowseScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuItem by remember { mutableStateOf<VodItem?>(null) }
+    var categoryMenu by remember { mutableStateOf<VodCategory?>(null) }
+    var pinRequest by remember { mutableStateOf<VodPinRequest?>(null) }
     val searchFocus = remember { FocusRequester() }
     // Poster mode (like the guide): while the posters have the focus, the rail and the categories
     // slide away. A poster's menu keeps the mode.
@@ -255,10 +259,17 @@ fun VodBrowseScreen(
                                 text = categoryLabel(category),
                                 selected = selected,
                                 onClick = {
-                                    viewModel.select(category)
-                                    viewModel.setQuery("")
-                                    gridFocusFor = category.key
+                                    if (category.key in state.closedKeys) {
+                                        // A locked category asks for the PIN first.
+                                        pinRequest = VodPinRequest.Open(category)
+                                    } else {
+                                        viewModel.select(category)
+                                        viewModel.setQuery("")
+                                        gridFocusFor = category.key
+                                    }
                                 },
+                                onLongClick = { categoryMenu = category }.takeIf { !category.isFavorites },
+                                locked = category.key in state.lockedKeys,
                                 modifier =
                                     Modifier
                                         .focusProperties { if (items.isNotEmpty()) right = gridEntry }
@@ -334,7 +345,17 @@ fun VodBrowseScreen(
                     }
                 }
             }
-            if (!tv && hasCategories) PhoneCategories(state, viewModel::select)
+            if (!tv && hasCategories) {
+                PhoneCategories(state) { category ->
+                    if (category.key in
+                        state.closedKeys
+                    ) {
+                        pinRequest = VodPinRequest.Open(category)
+                    } else {
+                        viewModel.select(category)
+                    }
+                }
+            }
             when {
                 state.playlists == null -> {}
 
@@ -365,6 +386,10 @@ fun VodBrowseScreen(
                             },
                         ),
                     )
+                }
+
+                itemsState.locked && !searching && itemsState.categoryKey == state.selected?.key -> {
+                    Message(stringResource(R.string.vod_locked_message))
                 }
 
                 searching && items.isEmpty() && itemsState.categoryKey == searchKey(query.trim()) -> {
@@ -457,6 +482,79 @@ fun VodBrowseScreen(
             }
         }
     }
+    categoryMenu?.let { category ->
+        val isLocked = category.key in state.lockedKeys
+        OntMenu(
+            title = categoryLabel(category),
+            options =
+                listOf(
+                    OntMenuOption(
+                        stringResource(if (isLocked) R.string.vod_menu_unlock else R.string.vod_menu_lock),
+                    ) {
+                        pinRequest =
+                            if (!state.hasPin) {
+                                VodPinRequest.CreateThenLock(
+                                    category,
+                                )
+                            } else {
+                                VodPinRequest.Lock(category, !isLocked)
+                            }
+                    },
+                ),
+            onDismiss = { categoryMenu = null },
+        )
+    }
+
+    pinRequest?.let { request ->
+        val category = request.category
+        val done = {
+            pinRequest = null
+            scope.launch { focusCategory() }
+        }
+        when (request) {
+            is VodPinRequest.Open -> {
+                OntVerifyPinDialog(
+                    title = categoryLabel(category),
+                    check = viewModel::checkPin,
+                    onSuccess = {
+                        pinRequest = null
+                        viewModel.unlock(category)
+                        viewModel.select(category)
+                        viewModel.setQuery("")
+                        gridFocusFor = category.key
+                    },
+                    onDismiss = { done() },
+                )
+            }
+
+            is VodPinRequest.Lock -> {
+                OntVerifyPinDialog(
+                    title = categoryLabel(category),
+                    check = viewModel::checkPin,
+                    onSuccess = {
+                        viewModel.setLocked(category, request.lock)
+                        done()
+                    },
+                    onDismiss = { done() },
+                )
+            }
+
+            is VodPinRequest.CreateThenLock -> {
+                OntCreatePinDialog(
+                    title = stringResource(R.string.vod_pin_create_title),
+                    onCreated = { pin ->
+                        viewModel.setPin(pin)
+                        viewModel.setLocked(category, true)
+                        // The person who just chose the PIN keeps the category open for now.
+                        viewModel.unlock(category)
+                        done()
+                    },
+                    onDismiss = { done() },
+                )
+            }
+        }
+    }
+
     if (sortMenu) {
         OntMenu(
             title = stringResource(R.string.vod_sort_title),
@@ -561,3 +659,24 @@ private val VodSort.label: Int
             VodSort.Z_TO_A -> R.string.vod_sort_z_a
             VodSort.RANDOM -> R.string.vod_sort_random
         }
+
+/** A parental PIN dialog waiting on the movies / series screen. */
+private sealed interface VodPinRequest {
+    val category: VodCategory
+
+    /** Open a locked category. */
+    data class Open(
+        override val category: VodCategory,
+    ) : VodPinRequest
+
+    /** Lock or unlock a category (PIN already set). */
+    data class Lock(
+        override val category: VodCategory,
+        val lock: Boolean,
+    ) : VodPinRequest
+
+    /** No PIN yet: create one, then lock the category. */
+    data class CreateThenLock(
+        override val category: VodCategory,
+    ) : VodPinRequest
+}

@@ -47,6 +47,10 @@
     <string name="vod_sort_a_z">Title A → Z</string>
     <string name="vod_sort_z_a">Title Z → A</string>
     <string name="vod_sort_random">Random</string>
+    <string name="vod_menu_lock">Lock with the PIN</string>
+    <string name="vod_menu_unlock">Remove the lock</string>
+    <string name="vod_pin_create_title">Parental PIN</string>
+    <string name="vod_locked_message">This category is locked. Select it to enter the parental PIN.</string>
     <plurals name="vod_count">
         <item quantity="one">%d title</item>
         <item quantity="other">%d titles</item>

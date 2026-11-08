@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="ont_live">LIVE</string>
+    <string name="ont_pin_enter">Enter the parental PIN</string>
+    <string name="ont_pin_new">Choose a 4-digit PIN</string>
+    <string name="ont_pin_confirm">Type the same PIN again</string>
+    <string name="ont_pin_wrong">Wrong PIN</string>
+    <string name="ont_pin_mismatch">The two PINs differ, start again</string>
 </resources>

@@ -39,6 +39,21 @@ data class VodFavoriteEntity(
     val position: Long,
 )
 
+/** A category locked by the parental PIN (live, movie or series category of a playlist). */
+@Entity(
+    tableName = "category_lock",
+    primaryKeys = ["playlistId", "kind", "name"],
+    foreignKeys = [
+        ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class CategoryLockEntity(
+    val playlistId: Long,
+    /** `live`, `movie` or `series`. */
+    val kind: String,
+    val name: String,
+)
+
 /** The user's order and visibility of one provider category. */
 @Entity(
     tableName = "group_pref",
@@ -161,6 +176,17 @@ interface LibraryDao {
 
     @Query("DELETE FROM vod_favorite WHERE contentId LIKE :prefix || '%'")
     suspend fun deleteVodFavoritesWithPrefix(prefix: String)
+
+    // Parental locks
+
+    @Query("SELECT * FROM category_lock")
+    fun observeCategoryLocks(): Flow<List<CategoryLockEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addCategoryLock(lock: CategoryLockEntity)
+
+    @androidx.room.Delete
+    suspend fun removeCategoryLock(lock: CategoryLockEntity)
 
     // Categories
 

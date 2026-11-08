@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -39,9 +40,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.LocalIsTv
+import app.ontelevis.core.designsystem.component.OntCreatePinDialog
 import app.ontelevis.core.designsystem.component.OntIconButton
 import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntTopBar
+import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
 import app.ontelevis.core.designsystem.component.SectionLabel
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntTheme
@@ -61,6 +64,18 @@ fun SettingsScreen(
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
+    val hasPin by viewModel.hasPin.collectAsStateWithLifecycle()
+    var pinStep by remember { mutableStateOf(PinStep.NONE) }
+    // The PIN rows change when a PIN is created or removed: focus goes to the row that replaces them.
+    val pinRowFocus = remember { FocusRequester() }
+    var focusPinRow by remember { mutableStateOf(false) }
+    LaunchedEffect(hasPin, focusPinRow) {
+        if (focusPinRow) {
+            withFrameNanos { }
+            runCatching { pinRowFocus.requestFocus() }
+            focusPinRow = false
+        }
+    }
     val context = LocalContext.current
     val c = OntTheme.colors
     val tv = LocalIsTv.current
@@ -119,6 +134,48 @@ fun SettingsScreen(
             }
             item {
                 SectionLabel(
+                    stringResource(R.string.settings_parental),
+                    Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                Text(
+                    stringResource(R.string.settings_parental_help),
+                    style = OntTheme.type.meta,
+                    color = c.textMuted,
+                    modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
+                )
+            }
+            if (!hasPin) {
+                item {
+                    OntListItem(
+                        text = stringResource(R.string.settings_pin_create),
+                        selected = false,
+                        onClick = { pinStep = PinStep.CREATE },
+                        leadingIcon = { tint -> LockIcon(tint) },
+                        modifier = Modifier.focusRequester(pinRowFocus),
+                    )
+                }
+            } else {
+                item {
+                    OntListItem(
+                        text = stringResource(R.string.settings_pin_change),
+                        selected = false,
+                        onClick = { pinStep = PinStep.CHANGE_VERIFY },
+                        leadingIcon = { tint -> LockIcon(tint) },
+                        modifier = Modifier.focusRequester(pinRowFocus),
+                    )
+                }
+                item {
+                    OntListItem(
+                        text = stringResource(R.string.settings_pin_remove),
+                        selected = false,
+                        onClick = { pinStep = PinStep.REMOVE_VERIFY },
+                    )
+                }
+            }
+            item {
+                SectionLabel(
                     stringResource(R.string.settings_language),
                     Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
                 )
@@ -132,6 +189,47 @@ fun SettingsScreen(
                     },
                 )
             }
+        }
+    }
+    val pinTitle = stringResource(R.string.settings_parental)
+    when (pinStep) {
+        PinStep.NONE -> {}
+
+        PinStep.CREATE, PinStep.CHANGE_NEW -> {
+            OntCreatePinDialog(
+                title = pinTitle,
+                onCreated = {
+                    viewModel.setPin(it)
+                    pinStep = PinStep.NONE
+                    focusPinRow = true
+                },
+                onDismiss = {
+                    pinStep = PinStep.NONE
+                    focusPinRow = true
+                },
+            )
+        }
+
+        PinStep.CHANGE_VERIFY -> {
+            OntVerifyPinDialog(
+                title = pinTitle,
+                check = viewModel::checkPin,
+                onSuccess = { pinStep = PinStep.CHANGE_NEW },
+                onDismiss = { pinStep = PinStep.NONE },
+            )
+        }
+
+        PinStep.REMOVE_VERIFY -> {
+            OntVerifyPinDialog(
+                title = pinTitle,
+                check = viewModel::checkPin,
+                onSuccess = {
+                    viewModel.clearPin()
+                    pinStep = PinStep.NONE
+                    focusPinRow = true
+                },
+                onDismiss = { pinStep = PinStep.NONE },
+            )
         }
     }
     val loaded = playlists != null
@@ -253,6 +351,19 @@ private fun PlaylistRow(
             )
         }
     }
+}
+
+/** Where the parental PIN dialogs are. */
+private enum class PinStep { NONE, CREATE, CHANGE_VERIFY, CHANGE_NEW, REMOVE_VERIFY }
+
+@Composable
+private fun LockIcon(tint: androidx.compose.ui.graphics.Color) {
+    Icon(
+        painterResource(DesignR.drawable.ont_ic_lock),
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(16.dp),
+    )
 }
 
 /** A language's name in that language ("Français"), as language pickers usually show it. */

@@ -31,6 +31,11 @@
     <string name="settings_field_epg">Lien du guide des programmes (facultatif)</string>
     <string name="settings_field_epg_hint">Pris dans la liste si vide</string>
     <string name="settings_guide_failed">guide indisponible</string>
+    <string name="settings_parental">Contrôle parental</string>
+    <string name="settings_parental_help">Avec un NIP, maintenez OK sur une catégorie (Télé, Films, Séries) pour la verrouiller.</string>
+    <string name="settings_pin_create">Créer un NIP parental</string>
+    <string name="settings_pin_change">Changer le NIP</string>
+    <string name="settings_pin_remove">Retirer le NIP</string>
     <plurals name="settings_channel_count">
         <item quantity="one">%d chaîne</item>
         <item quantity="many">%d chaînes</item>

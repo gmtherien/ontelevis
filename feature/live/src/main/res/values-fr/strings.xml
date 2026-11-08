@@ -43,6 +43,10 @@
     <string name="live_menu_clear_history">Effacer l\'historique</string>
     <string name="live_hidden_tag">Masquée</string>
     <string name="live_hidden_categories">Masquées (%d)</string>
+    <string name="live_menu_lock">Verrouiller avec le NIP</string>
+    <string name="live_menu_unlock">Retirer le verrou</string>
+    <string name="live_pin_create_title">NIP parental</string>
+    <string name="live_locked_message">Cette catégorie est verrouillée. Sélectionnez-la pour entrer le NIP parental.</string>
     <plurals name="live_channel_count">
         <item quantity="one">%d chaîne</item>
         <item quantity="many">%d chaînes</item>

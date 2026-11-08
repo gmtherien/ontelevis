@@ -47,6 +47,10 @@
     <string name="vod_sort_a_z">Titre A → Z</string>
     <string name="vod_sort_z_a">Titre Z → A</string>
     <string name="vod_sort_random">Aléatoire</string>
+    <string name="vod_menu_lock">Verrouiller avec le NIP</string>
+    <string name="vod_menu_unlock">Retirer le verrou</string>
+    <string name="vod_pin_create_title">NIP parental</string>
+    <string name="vod_locked_message">Cette catégorie est verrouillée. Sélectionnez-la pour entrer le NIP parental.</string>
     <plurals name="vod_count">
         <item quantity="one">%d titre</item>
         <item quantity="many">%d titres</item>

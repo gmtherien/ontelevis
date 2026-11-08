@@ -42,6 +42,13 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   (`LiveViewModel.extendIntoPast`, re-anchoring keeps it); past programmes in the archive get a rewind
   mark and OK plays them in `VodPlayerScreen` (`VodPlayerRoute.catchup*`, no resume point). Back lands
   on the replayed programme. BLCK archives have gaps (404 = "no recording", not our link).
+- Parental PIN (`ParentalControl`): 4 digits, stored as salted SHA-256 in prefs `parental`, never in
+  clear. Locks in `category_lock` (playlistId, kind live/movie/series, name; follows playlist delete).
+  `closed` = locked minus opened this session; `MainActivity.onStop` calls `relock()`. Closed
+  categories ask for the PIN on OK, show no content, and their channels / titles stay out of
+  Favourites, History and search; a playing channel of a closed category stops. Lock/unlock from the
+  category hold-OK menu (asks to create a PIN if none). PIN dialogs: `OntVerifyPinDialog` /
+  `OntCreatePinDialog` (D-pad keypad + remote number keys).
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
   suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.

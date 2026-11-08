@@ -77,11 +77,13 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.ChannelLogoTile
 import app.ontelevis.core.designsystem.component.LocalIsTv
+import app.ontelevis.core.designsystem.component.OntCreatePinDialog
 import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPrimaryButton
 import app.ontelevis.core.designsystem.component.OntTopBar
+import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
 import app.ontelevis.core.designsystem.component.SectionLabel
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntMotion
@@ -116,6 +118,10 @@ private class LiveActions(
     val extendIntoPast: (Channel) -> Unit,
     /** Plays a past programme (catch-up) full screen. */
     val replay: (Channel, Programme) -> Unit,
+    val checkPin: (String) -> Boolean,
+    val setPin: (String) -> Unit,
+    val unlock: (ChannelGroup) -> Unit,
+    val setLocked: (ChannelGroup, Boolean) -> Unit,
 )
 
 /**
@@ -154,6 +160,10 @@ fun LiveScreen(
                 toggleShowHidden = viewModel::toggleShowHidden,
                 clearHistory = viewModel::clearHistory,
                 extendIntoPast = viewModel::extendIntoPast,
+                checkPin = viewModel::checkPin,
+                setPin = viewModel::setPin,
+                unlock = viewModel::unlock,
+                setLocked = viewModel::setLocked,
                 replay = { channel, programme ->
                     viewModel.lastReplay = channel.id to programme.startMillis
                     onOpenCatchup(channel.id, programme.startMillis, programme.stopMillis, programme.title)
@@ -175,7 +185,48 @@ fun LiveScreen(
             modifier,
         )
     } else {
-        PhoneLive(state, channels.list, programmes.byChannel, now, actions, modifier)
+        var phonePin by remember { mutableStateOf<ChannelGroup?>(null) }
+        val phoneActions =
+            remember(actions, state.closedKeys) {
+                LiveActions(
+                    select = { group ->
+                        if (group.key in
+                            state.closedKeys
+                        ) {
+                            phonePin = group
+                        } else {
+                            actions.select(group)
+                        }
+                    },
+                    play = actions.play,
+                    addPlaylist = actions.addPlaylist,
+                    fullscreen = actions.fullscreen,
+                    toggleFavorite = actions.toggleFavorite,
+                    moveGroup = actions.moveGroup,
+                    setGroupHidden = actions.setGroupHidden,
+                    toggleShowHidden = actions.toggleShowHidden,
+                    clearHistory = actions.clearHistory,
+                    extendIntoPast = actions.extendIntoPast,
+                    replay = actions.replay,
+                    checkPin = actions.checkPin,
+                    setPin = actions.setPin,
+                    unlock = actions.unlock,
+                    setLocked = actions.setLocked,
+                )
+            }
+        PhoneLive(state, channels.list, programmes.byChannel, now, phoneActions, modifier)
+        phonePin?.let { group ->
+            OntVerifyPinDialog(
+                title = groupLabel(group),
+                check = actions.checkPin,
+                onSuccess = {
+                    phonePin = null
+                    actions.unlock(group)
+                    actions.select(group)
+                },
+                onDismiss = { phonePin = null },
+            )
+        }
     }
 }
 
@@ -294,6 +345,7 @@ private fun TvLive(
     var panelFocusKey by remember { mutableStateOf<String?>(null) }
     var channelMenu by remember { mutableStateOf<Channel?>(null) }
     var groupMenu by remember { mutableStateOf<ChannelGroup?>(null) }
+    var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
     // Category being moved with Up / Down (hold OK > Move).
     var moving by remember { mutableStateOf<ChannelGroup?>(null) }
     // Guide mode (as in TiviMate): while the guide has the focus, the rail and the categories slide away
@@ -449,11 +501,17 @@ private fun TvLive(
                 selected = state.selectedGroup,
                 moving = moving,
                 onSelect = { group ->
-                    actions.select(group)
-                    // The panel's focus anchor follows the new selection.
-                    panelFocusKey = null
-                    guideFocusFor = group.key
+                    if (group.key in state.closedKeys) {
+                        // A locked category asks for the PIN first.
+                        pinRequest = PinRequest.Open(group)
+                    } else {
+                        actions.select(group)
+                        // The panel's focus anchor follows the new selection.
+                        panelFocusKey = null
+                        guideFocusFor = group.key
+                    }
                 },
+                lockedKeys = state.lockedKeys,
                 onMenu = { groupMenu = it },
                 onMove = { step -> moving?.let { actions.moveGroup(it, step) } },
                 onEndMove = {
@@ -521,7 +579,9 @@ private fun TvLive(
                         },
                     )
                     val shortcut = state.selectedGroup?.shortcut
-                    if (shortcut != null && channels.isEmpty() && channelsState.groupKey == groupKey) {
+                    if (channelsState.locked && channelsState.groupKey == groupKey) {
+                        TvMessage(stringResource(R.string.live_locked_message))
+                    } else if (shortcut != null && channels.isEmpty() && channelsState.groupKey == groupKey) {
                         TvMessage(
                             stringResource(
                                 if (shortcut ==
@@ -606,8 +666,18 @@ private fun TvLive(
                 }
 
                 null -> {
+                    val isLocked = group.key in state.lockedKeys
                     listOf(
                         OntMenuOption(stringResource(R.string.live_menu_move)) { moving = group },
+                        OntMenuOption(
+                            stringResource(if (isLocked) R.string.live_menu_unlock else R.string.live_menu_lock),
+                        ) {
+                            pinRequest =
+                                when {
+                                    !state.hasPin -> PinRequest.CreateThenLock(group)
+                                    else -> PinRequest.Lock(group, !isLocked)
+                                }
+                        },
                         OntMenuOption(
                             stringResource(if (group.hidden) R.string.live_menu_unhide else R.string.live_menu_hide),
                         ) {
@@ -642,6 +712,77 @@ private fun TvLive(
             OntMenu(title = groupLabel(group), options = options, onDismiss = { groupMenu = null })
         }
     }
+
+    pinRequest?.let { request ->
+        val group = request.group
+        val done = {
+            pinRequest = null
+            scope.launch { focusPanel(group.entryKey) }
+        }
+        when (request) {
+            is PinRequest.Open -> {
+                OntVerifyPinDialog(
+                    title = groupLabel(group),
+                    check = actions.checkPin,
+                    onSuccess = {
+                        pinRequest = null
+                        actions.unlock(group)
+                        actions.select(group)
+                        panelFocusKey = null
+                        guideFocusFor = group.key
+                    },
+                    onDismiss = { done() },
+                )
+            }
+
+            is PinRequest.Lock -> {
+                OntVerifyPinDialog(
+                    title = groupLabel(group),
+                    check = actions.checkPin,
+                    onSuccess = {
+                        actions.setLocked(group, request.lock)
+                        done()
+                    },
+                    onDismiss = { done() },
+                )
+            }
+
+            is PinRequest.CreateThenLock -> {
+                OntCreatePinDialog(
+                    title = stringResource(R.string.live_pin_create_title),
+                    onCreated = { pin ->
+                        actions.setPin(pin)
+                        actions.setLocked(group, true)
+                        // The person who just chose the PIN keeps the category open for now.
+                        actions.unlock(group)
+                        done()
+                    },
+                    onDismiss = { done() },
+                )
+            }
+        }
+    }
+}
+
+/** A parental PIN dialog waiting on the TV screen. */
+private sealed interface PinRequest {
+    val group: ChannelGroup
+
+    /** Open a locked category. */
+    data class Open(
+        override val group: ChannelGroup,
+    ) : PinRequest
+
+    /** Lock or unlock a category (PIN already set). */
+    data class Lock(
+        override val group: ChannelGroup,
+        val lock: Boolean,
+    ) : PinRequest
+
+    /** No PIN yet: create one, then lock the category. */
+    data class CreateThenLock(
+        override val group: ChannelGroup,
+    ) : PinRequest
 }
 
 @Composable
@@ -649,6 +790,7 @@ private fun CategoryPanel(
     title: String,
     entries: List<PanelEntry>,
     selected: ChannelGroup?,
+    lockedKeys: Set<Pair<Long, String>>,
     moving: ChannelGroup?,
     onSelect: (ChannelGroup) -> Unit,
     onMenu: (ChannelGroup) -> Unit,
@@ -698,6 +840,7 @@ private fun CategoryPanel(
                             onClick = { onSelect(group) },
                             onLongClick = { onMenu(group) }.takeIf { group.shortcut != Shortcut.FAVORITES },
                             dimmed = group.hidden,
+                            locked = group.key in lockedKeys,
                             trailingTag =
                                 when {
                                     isMoving -> "▲▼"

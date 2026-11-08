@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="ont_live">EN DIRECT</string>
+    <string name="ont_pin_enter">Entrez le NIP parental</string>
+    <string name="ont_pin_new">Choisissez un NIP de 4 chiffres</string>
+    <string name="ont_pin_confirm">Entrez le même NIP de nouveau</string>
+    <string name="ont_pin_wrong">NIP incorrect</string>
+    <string name="ont_pin_mismatch">Les deux NIP diffèrent, recommencez</string>
 </resources>
