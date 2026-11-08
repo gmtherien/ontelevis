@@ -9,11 +9,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import app.ontelevis.core.designsystem.theme.OntTheme
 
 /** Temporary screen for features not built yet. Works under both the TV and phone themes. */
 @Composable
@@ -22,18 +20,16 @@ fun PlaceholderScreen(
     message: String,
     modifier: Modifier = Modifier,
 ) {
+    val colors = OntTheme.colors
     Column(
-        modifier = modifier.fillMaxSize().background(OntelevisColors.Background).padding(32.dp),
+        modifier = modifier.fillMaxSize().background(colors.background).padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BasicText(
-            text = title,
-            style = TextStyle(color = OntelevisColors.OnBackground, fontSize = 28.sp, fontWeight = FontWeight.SemiBold),
-        )
+        BasicText(text = title, style = OntTheme.type.title.copy(color = colors.textPrimary))
         BasicText(
             text = message,
-            style = TextStyle(color = OntelevisColors.Muted, fontSize = 16.sp, textAlign = TextAlign.Center),
+            style = OntTheme.type.body.copy(color = colors.textMuted, textAlign = TextAlign.Center),
         )
     }
 }

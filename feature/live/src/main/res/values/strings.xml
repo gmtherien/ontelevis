@@ -1,5 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feature_live_title">Live TV</string>
-    <string name="feature_live_placeholder">Your channels will appear here once a playlist is added.</string>
+    <string name="feature_live_title">TV</string>
+    <string name="live_section_categories">Categories</string>
+    <string name="live_uncategorized">Uncategorized</string>
+    <string name="live_no_playlist_title">No playlist yet</string>
+    <string name="live_no_playlist_body">Add an M3U link or an Xtream Codes account to see your channels.</string>
+    <string name="live_add_playlist">Add a playlist</string>
+    <string name="live_loading">Loading channels…</string>
+    <string name="live_failed">The playlist could not be loaded. Check it in Settings.</string>
+    <string name="live_pick_channel">Choose a channel</string>
+    <string name="live_connecting">Connecting…</string>
+    <string name="live_fullscreen">Full screen</string>
+    <string name="live_continuous">Continuous broadcast</string>
+    <string name="live_continuous_title">Continuous broadcast.</string>
+    <string name="live_continuous_body">This channel has no programme guide; the stream plays continuously.</string>
+    <string name="live_zap_hint">▲ ▼ change channel</string>
+    <string name="live_error_not_found">This channel is no longer available on the server.</string>
+    <string name="live_error_unsupported">This stream format cannot be played.</string>
+    <string name="live_error_unreachable">The stream does not respond. Press OK to try again.</string>
+    <string name="live_error_restart_loop">The connection keeps dropping. Your provider may limit the number of connections.</string>
+    <string name="live_guide_today">Today</string>
+    <string name="live_continuous_sub">24/7, no programme guide</string>
+    <string name="live_no_info_title">No information</string>
+    <string name="live_no_info">Nothing listed at this time</string>
+    <string name="live_now_playing">Now playing</string>
+    <string name="live_next">Next</string>
+    <string name="live_error_device">This device cannot decode this channel\'s video (format too demanding, e.g. 4K or Dolby Vision).</string>
+    <plurals name="live_channel_count">
+        <item quantity="one">%d channel</item>
+        <item quantity="other">%d channels</item>
+    </plurals>
+    <plurals name="live_minutes_left">
+        <item quantity="one">%d min left</item>
+        <item quantity="other">%d min left</item>
+    </plurals>
 </resources>

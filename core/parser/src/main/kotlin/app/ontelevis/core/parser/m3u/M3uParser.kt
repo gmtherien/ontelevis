@@ -21,9 +21,22 @@ data class M3uEntry(
 object M3uParser {
     private val attributeRegex = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
 
-    fun parse(reader: Reader): Sequence<M3uEntry> = parse(reader.buffered().lineSequence())
+    fun parse(
+        reader: Reader,
+        onHeader: (Map<String, String>) -> Unit = {},
+    ): Sequence<M3uEntry> = parse(reader.buffered().lineSequence(), onHeader)
 
-    fun parse(lines: Sequence<String>): Sequence<M3uEntry> =
+    /** The guide link a playlist announces in its `#EXTM3U` line, if any. */
+    fun epgUrlOf(header: Map<String, String>): String? =
+        (header["url-tvg"] ?: header["x-tvg-url"])
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("http", ignoreCase = true) }
+
+    fun parse(
+        lines: Sequence<String>,
+        onHeader: (Map<String, String>) -> Unit = {},
+    ): Sequence<M3uEntry> =
         sequence {
             var pendingInfo: String? = null
             var pendingGroup: String? = null
@@ -31,6 +44,15 @@ object M3uParser {
                 val line = raw.trim().removePrefix("\uFEFF")
                 when {
                     line.isEmpty() -> {}
+
+                    line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                        onHeader(
+                            attributeRegex.findAll(line).associate {
+                                it.groupValues[1].lowercase() to
+                                    it.groupValues[2]
+                            },
+                        )
+                    }
 
                     line.startsWith("#EXTINF", ignoreCase = true) -> {
                         pendingInfo = line

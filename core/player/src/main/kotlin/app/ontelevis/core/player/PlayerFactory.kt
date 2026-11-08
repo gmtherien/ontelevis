@@ -1,10 +1,17 @@
 package app.ontelevis.core.player
 
+import android.app.ActivityManager
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -15,6 +22,9 @@ import javax.inject.Inject
  *   decoders, so AC3 / E-AC3 5.1 plays on boxes without a Dolby licence. `PREFER` would
  *   software-decode plain AAC too, which costs CPU on weak boxes.
  * - Decoder fallback: if the first hardware decoder fails to start, try the next one.
+ * - Low-RAM boxes (Fire Stick, under 2.5 GB): the buffer is capped in bytes, or a 4K stream
+ *   fills the heap and the app is killed.
+ * - Redirects across http / https are followed (many IPTV panels redirect).
  */
 class PlayerFactory
     @Inject
@@ -27,6 +37,42 @@ class PlayerFactory
                 DefaultRenderersFactory(context)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
                     .setEnableDecoderFallback(true)
-            return ExoPlayer.Builder(context, renderers).build()
+            val http =
+                DefaultHttpDataSource
+                    .Factory()
+                    .setUserAgent(USER_AGENT)
+                    .setAllowCrossProtocolRedirects(true)
+                    .setConnectTimeoutMs(15_000)
+                    .setReadTimeoutMs(30_000)
+            val mediaSources = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+            val loadControl =
+                DefaultLoadControl
+                    .Builder()
+                    .apply { if (isLowRam()) setTargetBufferBytes(LOW_RAM_BUFFER_BYTES) }
+                    .build()
+            val audio =
+                AudioAttributes
+                    .Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build()
+            return ExoPlayer
+                .Builder(context, renderers)
+                .setMediaSourceFactory(mediaSources)
+                .setLoadControl(loadControl)
+                .setAudioAttributes(audio, true)
+                .build()
+        }
+
+        private fun isLowRam(): Boolean {
+            val manager = context.getSystemService(ActivityManager::class.java) ?: return false
+            val memory = ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
+            return manager.isLowRamDevice || memory.totalMem < LOW_RAM_TOTAL_BYTES
+        }
+
+        private companion object {
+            const val USER_AGENT = "Ontelevis"
+            const val LOW_RAM_TOTAL_BYTES = 2_500L * 1024 * 1024
+            const val LOW_RAM_BUFFER_BYTES = 64 * 1024 * 1024
         }
     }

@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feature_live_title">TV en direct</string>
-    <string name="feature_live_placeholder">Vos chaînes apparaîtront ici après l\'ajout d\'une liste de lecture.</string>
+    <string name="feature_live_title">Télé</string>
+    <string name="live_section_categories">Catégories</string>
+    <string name="live_uncategorized">Sans catégorie</string>
+    <string name="live_no_playlist_title">Aucune liste de lecture</string>
+    <string name="live_no_playlist_body">Ajoutez un lien M3U ou un compte Xtream Codes pour voir vos chaînes.</string>
+    <string name="live_add_playlist">Ajouter une liste</string>
+    <string name="live_loading">Chargement des chaînes…</string>
+    <string name="live_failed">La liste n\'a pas pu être chargée. Vérifiez-la dans les Paramètres.</string>
+    <string name="live_pick_channel">Choisissez une chaîne</string>
+    <string name="live_connecting">Connexion…</string>
+    <string name="live_fullscreen">Plein écran</string>
+    <string name="live_continuous">Diffusion continue</string>
+    <string name="live_continuous_title">Diffusion continue.</string>
+    <string name="live_continuous_body">Cette chaîne ne fournit pas de grille horaire, le flux joue en boucle.</string>
+    <string name="live_zap_hint">▲ ▼ changer de chaîne</string>
+    <string name="live_error_not_found">Cette chaîne n\'existe plus sur le serveur.</string>
+    <string name="live_error_unsupported">Le format de ce flux ne peut pas être lu.</string>
+    <string name="live_error_unreachable">Le flux ne répond pas. Appuyez sur OK pour réessayer.</string>
+    <string name="live_error_restart_loop">La connexion coupe sans arrêt. Votre fournisseur limite peut-être le nombre de connexions.</string>
+    <string name="live_guide_today">Aujourd\'hui</string>
+    <string name="live_continuous_sub">24/7, sans grille horaire</string>
+    <string name="live_no_info_title">Aucune information</string>
+    <string name="live_no_info">Rien d\'annoncé à cette heure</string>
+    <string name="live_now_playing">En lecture</string>
+    <string name="live_next">Ensuite</string>
+    <string name="live_error_device">Cet appareil ne peut pas décoder la vidéo de cette chaîne (format trop exigeant, ex. 4K ou Dolby Vision).</string>
+    <plurals name="live_channel_count">
+        <item quantity="one">%d chaîne</item>
+        <item quantity="many">%d chaînes</item>
+        <item quantity="other">%d chaînes</item>
+    </plurals>
+    <plurals name="live_minutes_left">
+        <item quantity="one">reste %d min</item>
+        <item quantity="many">reste %d min</item>
+        <item quantity="other">reste %d min</item>
+    </plurals>
 </resources>

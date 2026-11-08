@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ontelevis, système visuel</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Inter+Tight:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0A0B0E}
+a{color:#F2A93B}a:hover{color:#FFC56B}
+</style>
+
+</head>
+<body>
+
+
+<div style="width: 1920px; height: 1080px; box-sizing: border-box; padding: 72px 96px; background: #0A0B0E; color: #ECEDEF; font-family: Inter, system-ui, sans-serif; font-size: 26px; display: flex; flex-direction: column; gap: 56px; -webkit-font-smoothing: antialiased">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h1 style="margin: 0; font-family: 'Inter Tight', Inter, sans-serif; font-size: 64px; font-weight: 700; letter-spacing: -0.02em">Ontelevis <span style="color: #7D8390; font-weight: 500">système visuel</span></h1>
+<span style="font-size: 22px; color: #7D8390">Android TV · Compose for TV · valeurs en dp / sp (1 dp = 2 px ici)</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 72px; flex: 1 1 auto">
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="font-size: 22px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8390">Couleurs</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #0A0B0E; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Fond</div>
+<div style="font-size: 20px; color: #7D8390">Arrière-plan, rail</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#0A0B0E</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #12141A; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Surface 1</div>
+<div style="font-size: 20px; color: #7D8390">Boutons secondaires</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#12141A</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #171A21; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Surface 2</div>
+<div style="font-size: 20px; color: #7D8390">Item sélectionné, tuiles</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#171A21</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #1A1D24; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Surface 3</div>
+<div style="font-size: 20px; color: #7D8390">Programme en cours</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#1A1D24</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #ECEDEF; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Texte</div>
+<div style="font-size: 20px; color: #7D8390">Titres, contenu</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#ECEDEF</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #A2A7B3; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Texte secondaire</div>
+<div style="font-size: 20px; color: #7D8390">Métadonnées</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#A2A7B3</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #7D8390; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Texte tertiaire</div>
+<div style="font-size: 20px; color: #7D8390">Étiquettes, heures</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#7D8390</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #ECEDEF; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Focus</div>
+<div style="font-size: 20px; color: #7D8390">Fond de l’élément focalisé</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#ECEDEF</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #F2A93B; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Ambre</div>
+<div style="font-size: 20px; color: #7D8390">Accent unique, sélection</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#F2A93B</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 24px">
+<div style="width: 64px; height: 64px; border-radius: 16px; background: #FF5A4E; border: 2px solid #23272F; box-sizing: border-box"></div>
+<div style="flex: 1 1 auto">
+<div style="font-weight: 600; font-size: 24px">Direct</div>
+<div style="font-size: 20px; color: #7D8390">Pastille en direct seulement</div>
+</div>
+<span style="font-size: 20px; color: #A2A7B3; font-family: ui-monospace, Menlo, monospace">#FF5A4E</span>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 26px">
+<div style="font-size: 22px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8390">Typographie</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Display · Inter Tight 600 · 28 sp</span>
+<span style="font-family: 'Inter Tight', Inter, sans-serif; font-size: 56px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.1">Night Lights</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Titre · Inter Tight 600 · 22 sp</span>
+<span style="font-family: 'Inter Tight', Inter, sans-serif; font-size: 44px; font-weight: 600; letter-spacing: -0.01em">Relaxation</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Item · Inter 600 · 13 sp</span>
+<span style="font-size: 26px; font-weight: 600">Frozen Calm</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Corps · Inter 400 · 13 sp, interligne 1,45</span>
+<span style="font-size: 26px; line-height: 1.45; color: #A2A7B3">Le flux joue en boucle, 24 heures sur 24.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Méta · Inter 400 · 11 sp (minimum absolu à 3 m)</span>
+<span style="font-size: 22px; color: #7D8390">Relax · HDR</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Étiquette · Inter 600 · 11 sp · capitales</span>
+<span style="font-size: 22px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A2A7B3">Catégories</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; color: #7D8390">Heures · chiffres tabulaires</span>
+<span style="font-family: 'Inter Tight', Inter, sans-serif; font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums">10:00  10:30  11:00</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 26px">
+<div style="font-size: 22px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8390">États au focus</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 400px">
+<div style="display: flex; align-items: center; gap: 20px; height: 72px; padding: 0 20px; border-radius: 16px; color: #A2A7B3"><span style="width: 12px; flex: 0 0 12px"></span>Repos</div>
+<div style="display: flex; align-items: center; gap: 20px; height: 72px; padding: 0 20px; border-radius: 16px; color: #ECEDEF; background: #171A21; font-weight: 600"><span style="width: 12px; height: 12px; border-radius: 6px; background: #F2A93B; flex: 0 0 12px"></span>Sélectionné</div>
+<div style="display: flex; align-items: center; gap: 20px; height: 72px; padding: 0 20px; border-radius: 16px; color: #0A0B0E; background: #ECEDEF; font-weight: 600; transform: scale(1.04); transform-origin: left center; box-shadow: 0 12px 32px rgba(0,0,0,0.55)"><span style="width: 12px; flex: 0 0 12px"></span>Focus</div>
+<div style="display: flex; align-items: center; gap: 20px; height: 72px; padding: 0 20px; border-radius: 16px; color: #0A0B0E; background: #ECEDEF; font-weight: 600; transform: scale(1.04); transform-origin: left center"><span style="width: 12px; height: 12px; border-radius: 6px; background: #B8741A; flex: 0 0 12px"></span>Focus + sélectionné</div>
+</div>
+<div style="display: flex; gap: 16px; align-items: center">
+<span style="display: flex; align-items: center; height: 80px; padding: 0 36px; border-radius: 20px; background: #F2A93B; color: #1A1206; font-weight: 600; font-size: 28px">Repos</span>
+<span style="display: flex; align-items: center; height: 80px; padding: 0 36px; border-radius: 20px; background: #ECEDEF; color: #0A0B0E; font-weight: 600; font-size: 28px; transform: scale(1.06); box-shadow: 0 12px 32px rgba(0,0,0,0.55)">Focus</span>
+<span style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #262A33; background: #12141A; box-sizing: border-box"></span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<span style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-radius: 12px; background: #171A21; font-size: 20px; font-weight: 600; letter-spacing: 0.06em"><span style="width: 12px; height: 12px; border-radius: 6px; background: #FF5A4E"></span>EN DIRECT</span>
+<span style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em; color: #C4C8D0; border: 2px solid #2A2E37; border-radius: 10px; padding: 4px 14px">4K</span>
+<span style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em; color: #C4C8D0; border: 2px solid #2A2E37; border-radius: 10px; padding: 4px 14px">HDR</span>
+<span style="font-size: 20px; font-weight: 600; letter-spacing: 0.04em; color: #C4C8D0; border: 2px solid #2A2E37; border-radius: 10px; padding: 4px 14px">PPV</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 20px; color: #7D8390">Blocs du guide : passé · en cours · à venir (focus)</div>
+<div style="display: flex; gap: 10px; height: 96px">
+<div style="flex: 2 1 0; border-radius: 20px; background: #0F1014; border: 2px solid #1A1D24; padding: 0 20px; display: flex; flex-direction: column; justify-content: center; gap: 2px">
+<span style="font-size: 24px; font-weight: 500; color: #7D8390">[Titre]</span>
+<span style="font-size: 20px; color: #7D8390; font-variant-numeric: tabular-nums">09:30</span>
+</div>
+<div style="flex: 3 1 0; position: relative; overflow: hidden; border-radius: 20px; background: #1A1D24; padding: 0 20px; display: flex; flex-direction: column; justify-content: center; gap: 2px">
+<span style="font-size: 24px; font-weight: 600">[En cours]</span>
+<span style="font-size: 20px; color: #A2A7B3; font-variant-numeric: tabular-nums">reste 40 min</span>
+<span style="position: absolute; left: 0; bottom: 0; height: 6px; width: 33%; background: #F2A93B"></span>
+</div>
+<div style="flex: 2 1 0; border-radius: 20px; background: #ECEDEF; color: #0A0B0E; padding: 0 20px; display: flex; flex-direction: column; justify-content: center; gap: 2px; transform: scale(1.04); box-shadow: 0 12px 32px rgba(0,0,0,0.55)">
+<span style="font-size: 24px; font-weight: 600">[À venir]</span>
+<span style="font-size: 20px; color: #3A3F4A; font-variant-numeric: tabular-nums">11:30</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body>
+</html>

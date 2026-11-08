@@ -82,4 +82,16 @@ class M3uParserTest {
         assertEquals(3, firstThree.size)
         assertEquals(6, linesRead)
     }
+
+    @Test
+    fun `header announces the guide link`() {
+        var header = emptyMap<String, String>()
+        val playlist =
+            "#EXTM3U x-tvg-url=\"https://a.example/epg.xml.gz,https://b.example/epg.xml\"\n" +
+                "#EXTINF:-1,A\nhttp://x/a.ts"
+
+        M3uParser.parse(playlist.lineSequence()) { header = it }.toList()
+
+        assertEquals("https://a.example/epg.xml.gz", M3uParser.epgUrlOf(header))
+    }
 }

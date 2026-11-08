@@ -14,6 +14,8 @@ class AndroidFeatureConventionPlugin : Plugin<Project> {
                 add("implementation", project(":core:designsystem"))
                 add("implementation", project(":core:model"))
                 add("implementation", libs.findLibrary("androidx-lifecycle-runtime-compose").get())
+                add("implementation", libs.findLibrary("androidx-hilt-lifecycle-viewmodel-compose").get())
+                add("implementation", project(":core:data"))
             }
         }
     }

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vod_movies">Films</string>
+    <string name="vod_series">Séries</string>
+    <string name="vod_categories">Catégories</string>
+    <string name="vod_uncategorized">Sans catégorie</string>
+    <string name="vod_loading_movies">Chargement des films… Les gros catalogues prennent une minute ou deux.</string>
+    <string name="vod_loading_series">Chargement des séries… Les gros catalogues prennent une minute ou deux.</string>
+    <string name="vod_empty_movies">Cette liste ne contient aucun film.</string>
+    <string name="vod_empty_series">Cette liste ne contient aucune série.</string>
+    <string name="vod_play">Lire</string>
+    <string name="vod_resume">Reprendre à %1$s</string>
+    <string name="vod_from_start">Depuis le début</string>
+    <string name="vod_cast">Avec : %1$s</string>
+    <string name="vod_director">Réalisation : %1$s</string>
+    <string name="vod_season">Saison %1$d</string>
+    <string name="vod_play_episode">Lire S%1$d É%2$d</string>
+    <string name="vod_continue_episode">Continuer S%1$d É%2$d</string>
+    <string name="vod_loading_episodes">Chargement des épisodes…</string>
+    <string name="vod_no_episodes">Aucun épisode trouvé pour cette série.</string>
+    <string name="vod_loading">Chargement…</string>
+    <string name="vod_hint_playing">◀ ▶ 10 s · OK pause</string>
+    <string name="vod_hint_paused">En pause · OK pour reprendre</string>
+    <string name="vod_error_not_found">Ce titre n\'existe plus sur le serveur.</string>
+    <string name="vod_error_unsupported">Ce format de fichier ne peut pas être lu.</string>
+    <string name="vod_error_unreachable">Le fichier ne se charge pas. Revenez en arrière et réessayez.</string>
+    <string name="vod_error_device">Cet appareil ne peut pas décoder cette vidéo (format trop exigeant, ex. 4K ou Dolby Vision). Essayez une autre version du titre.</string>
+    <plurals name="vod_count">
+        <item quantity="one">%d titre</item>
+        <item quantity="many">%d titres</item>
+        <item quantity="other">%d titres</item>
+    </plurals>
+</resources>

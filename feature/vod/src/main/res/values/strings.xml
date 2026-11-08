@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vod_movies">Movies</string>
+    <string name="vod_series">Series</string>
+    <string name="vod_categories">Categories</string>
+    <string name="vod_uncategorized">Uncategorized</string>
+    <string name="vod_loading_movies">Loading movies… Big catalogues take a minute or two.</string>
+    <string name="vod_loading_series">Loading series… Big catalogues take a minute or two.</string>
+    <string name="vod_empty_movies">This playlist has no movies.</string>
+    <string name="vod_empty_series">This playlist has no series.</string>
+    <string name="vod_play">Play</string>
+    <string name="vod_resume">Resume at %1$s</string>
+    <string name="vod_from_start">From the beginning</string>
+    <string name="vod_cast">With: %1$s</string>
+    <string name="vod_director">Director: %1$s</string>
+    <string name="vod_season">Season %1$d</string>
+    <string name="vod_play_episode">Play S%1$d E%2$d</string>
+    <string name="vod_continue_episode">Continue S%1$d E%2$d</string>
+    <string name="vod_loading_episodes">Loading episodes…</string>
+    <string name="vod_no_episodes">No episodes found for this series.</string>
+    <string name="vod_loading">Loading…</string>
+    <string name="vod_hint_playing">◀ ▶ 10 s · OK pause</string>
+    <string name="vod_hint_paused">Paused · OK resume</string>
+    <string name="vod_error_not_found">This title is no longer available on the server.</string>
+    <string name="vod_error_unsupported">This file format cannot be played.</string>
+    <string name="vod_error_unreachable">The file does not load. Go back and try again.</string>
+    <string name="vod_error_device">This device cannot decode this video (format too demanding, e.g. 4K or Dolby Vision). Try another version of the title.</string>
+    <plurals name="vod_count">
+        <item quantity="one">%d title</item>
+        <item quantity="other">%d titles</item>
+    </plurals>
+</resources>

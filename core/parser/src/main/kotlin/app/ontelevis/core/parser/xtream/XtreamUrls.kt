@@ -25,6 +25,16 @@ class XtreamUrls(
         extension: String = "ts",
     ): String = "$baseUrl/live/${encode(username)}/${encode(password)}/$streamId.$extension"
 
+    fun movie(
+        streamId: String,
+        extension: String,
+    ): String = "$baseUrl/movie/${encode(username)}/${encode(password)}/$streamId.$extension"
+
+    fun episode(
+        episodeId: String,
+        extension: String,
+    ): String = "$baseUrl/series/${encode(username)}/${encode(password)}/$episodeId.$extension"
+
     fun xmltv(): String = "$baseUrl/xmltv.php?username=${encode(username)}&password=${encode(password)}"
 
     companion object {

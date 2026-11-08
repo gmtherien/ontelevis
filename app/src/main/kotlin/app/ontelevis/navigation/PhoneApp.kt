@@ -1,5 +1,7 @@
 package app.ontelevis.navigation
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -12,14 +14,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import app.ontelevis.feature.guide.GuideScreen
 import app.ontelevis.feature.live.LiveScreen
+import app.ontelevis.feature.live.PlayerScreen
+import app.ontelevis.feature.settings.AddPlaylistScreen
 import app.ontelevis.feature.settings.SettingsScreen
+import app.ontelevis.feature.vod.MoviesRoute
+import app.ontelevis.feature.vod.SeriesListRoute
+import app.ontelevis.feature.vod.VodPlayerRoute
+import app.ontelevis.core.designsystem.R as DesignR
+import app.ontelevis.feature.live.R as LiveR
+import app.ontelevis.feature.settings.R as SettingsR
+import app.ontelevis.feature.vod.R as VodR
+
+private enum class PhoneTab(
+    val route: Any,
+    @param:StringRes val title: Int,
+    @param:DrawableRes val icon: Int,
+) {
+    TV(LiveRoute, LiveR.string.feature_live_title, DesignR.drawable.ont_ic_television),
+    MOVIES(MoviesRoute, VodR.string.vod_movies, DesignR.drawable.ont_ic_film_strip),
+    SERIES(SeriesListRoute, VodR.string.vod_series, DesignR.drawable.ont_ic_monitor_play),
+    SETTINGS(SettingsRoute, SettingsR.string.feature_settings_title, DesignR.drawable.ont_ic_sliders_horizontal),
+}
 
 /** Phone / tablet: bottom navigation bar. */
 @Composable
@@ -30,21 +50,19 @@ fun PhoneApp() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                TopLevelDestination.entries.forEach { destination ->
-                    val title = stringResource(destination.titleRes)
-                    NavigationBarItem(
-                        selected = current?.hasRoute(destination.route::class) == true,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(painterResource(destination.iconRes), contentDescription = null) },
-                        label = { Text(title) },
-                    )
+            if (current?.hasRoute(PlayerRoute::class) != true && current?.hasRoute(VodPlayerRoute::class) != true) {
+                NavigationBar {
+                    PhoneTab.entries.forEach { tab ->
+                        val selected =
+                            current?.hasRoute(tab.route::class) == true ||
+                                (tab == PhoneTab.SETTINGS && current?.hasRoute(AddPlaylistRoute::class) == true)
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navController.goTo(tab.route) },
+                            icon = { Icon(painterResource(tab.icon), contentDescription = null) },
+                            label = { Text(stringResource(tab.title)) },
+                        )
+                    }
                 }
             }
         },
@@ -54,9 +72,16 @@ fun PhoneApp() {
             startDestination = LiveRoute,
             modifier = Modifier.padding(padding),
         ) {
-            composable<LiveRoute> { LiveScreen() }
-            composable<GuideRoute> { GuideScreen() }
-            composable<SettingsRoute> { SettingsScreen() }
+            composable<LiveRoute> {
+                LiveScreen(
+                    onAddPlaylist = { navController.navigate(AddPlaylistRoute) },
+                    onOpenFullscreen = { navController.navigate(PlayerRoute) },
+                )
+            }
+            composable<PlayerRoute> { PlayerScreen() }
+            vodDestinations(navController)
+            composable<SettingsRoute> { SettingsScreen(onAddPlaylist = { navController.navigate(AddPlaylistRoute) }) }
+            composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
         }
     }
 }

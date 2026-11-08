@@ -33,6 +33,7 @@ dependencies {
     implementation(project(":feature:live"))
     implementation(project(":feature:guide"))
     implementation(project(":feature:settings"))
+    implementation(project(":feature:vod"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

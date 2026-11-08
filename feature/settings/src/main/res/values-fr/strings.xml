@@ -1,5 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feature_settings_title">Paramètres</string>
-    <string name="feature_settings_placeholder">Listes de lecture, guide, langue et contrôle parental.</string>
+    <string name="settings_playlists">Listes de lecture</string>
+    <string name="settings_add_playlist">Ajouter une liste</string>
+    <string name="settings_kind_m3u">Lien M3U</string>
+    <string name="settings_kind_xtream">Xtream Codes</string>
+    <string name="settings_m3u_help">Collez le lien M3U ou M3U8 fourni par votre fournisseur.</string>
+    <string name="settings_xtream_help">Entrez l\'adresse du serveur, le nom d\'utilisateur et le mot de passe fournis par votre fournisseur.</string>
+    <string name="settings_field_name">Nom (facultatif)</string>
+    <string name="settings_field_name_hint">Mon fournisseur</string>
+    <string name="settings_field_url">Lien de la liste</string>
+    <string name="settings_field_server">Adresse du serveur</string>
+    <string name="settings_field_username">Nom d\'utilisateur</string>
+    <string name="settings_field_password">Mot de passe</string>
+    <string name="settings_add">Ajouter</string>
+    <string name="settings_language">Langue</string>
+    <string name="settings_language_system">Langue du système</string>
+    <string name="settings_loading_playlist">Chargement de la liste…</string>
+    <string name="settings_refresh">Actualiser</string>
+    <string name="settings_refreshing">Actualisation…</string>
+    <string name="settings_delete">Supprimer</string>
+    <string name="settings_delete_confirm">Appuyez de nouveau pour supprimer cette liste.</string>
+    <string name="settings_error_required">Champ requis</string>
+    <string name="settings_error_url">Entrez un lien qui commence par http:// ou https://</string>
+    <string name="settings_error_network">Impossible de joindre le serveur. Vérifiez l\'adresse et votre connexion.</string>
+    <string name="settings_error_http">Le serveur a refusé la demande. Vérifiez le lien.</string>
+    <string name="settings_error_auth">Connexion refusée. Vérifiez le nom d\'utilisateur et le mot de passe, ou si le compte a expiré.</string>
+    <string name="settings_error_format">La réponse n\'est pas une liste que l\'app sait lire.</string>
+    <string name="settings_error_empty">La liste ne contient aucune chaîne en direct.</string>
+    <string name="settings_field_epg">Lien du guide des programmes (facultatif)</string>
+    <string name="settings_field_epg_hint">Pris dans la liste si vide</string>
+    <string name="settings_guide_failed">guide indisponible</string>
+    <plurals name="settings_channel_count">
+        <item quantity="one">%d chaîne</item>
+        <item quantity="many">%d chaînes</item>
+        <item quantity="other">%d chaînes</item>
+    </plurals>
+    <plurals name="settings_programme_count">
+        <item quantity="one">%d programme</item>
+        <item quantity="many">%d programmes</item>
+        <item quantity="other">%d programmes</item>
+    </plurals>
+    <plurals name="settings_movie_count">
+        <item quantity="one">%d film</item>
+        <item quantity="many">%d films</item>
+        <item quantity="other">%d films</item>
+    </plurals>
+    <plurals name="settings_series_count">
+        <item quantity="one">%d série</item>
+        <item quantity="many">%d séries</item>
+        <item quantity="other">%d séries</item>
+    </plurals>
 </resources>

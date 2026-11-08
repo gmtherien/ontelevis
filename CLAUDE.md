@@ -16,12 +16,44 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
 ## Architecture
 - `:app` (Activity, navigation, TV vs phone via `isTelevision()`), `:core:model` (pure Kotlin),
   `:core:parser` (pure JVM, streaming), `:core:data` (Room + repositories, Hilt modules),
-  `:core:player` (Media3), `:core:designsystem` (themes), `:feature:*` (screens).
+  `:core:player` (Media3), `:core:designsystem` (theme, components, fonts, icons), `:feature:*` (screens).
+- Data flow: `PlaylistImporter` streams M3U / Xtream replies (`:core:parser` `ChannelImport`) into
+  Room in batches of 500 inside one transaction (a failure keeps the old channels).
+  `PlaylistSync` (WorkManager) refreshes daily and on "Update content".
+- Guide: `EpgImporter` streams XMLTV (gzip, relaxed XML for raw "&") into `programme`, only for the
+  playlist's own epg ids, from 1 day back to 7 days ahead. Link: user field, else Xtream `xmltv.php`,
+  else the M3U header (`url-tvg` / `x-tvg-url`). Adding a playlist loads channels, then the guide in
+  the background (`EpgRefreshWorker`).
+- VOD (`:feature:vod`, Films / Séries in the rail): Xtream movies and series load in the background
+  after the channels (`VodImporter`, `ExtrasRefreshWorker` = `EpgRefreshWorker`), episodes per series
+  on demand (`get_series_info`). M3U VOD is sorted in the same pass as the channels
+  (`M3uClassifier`: `/movie/` `/series/` paths, `S01E02`, video extensions, group words). Ids are
+  prefixed per kind (`::m:` `::s:` `::e:`: Xtream movie and episode numbers collide). `VodPlayer`
+  is separate from `LivePlayer`, which is held (`hold()` / `release()`) while a movie plays.
+  Resume points in `watch_progress` (saved every 10 s and on exit; >= 95 % = finished).
+- Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
+  going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
+  suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.
 - Convention plugins in `build-logic/`: `ontelevis.android.application|library|compose|feature`,
   `ontelevis.hilt`, `ontelevis.jvm.library`. Versions only in `gradle/libs.versions.toml`.
 - build-logic compiles against AGP only; other plugins are applied by id (keeps it independent
   of their Kotlin metadata version). AGP 9 built-in Kotlin: no `kotlin-android` plugin.
-- TV UI = `androidx.tv:tv-material`; phone UI = Compose Material 3. Feature screens must work in both.
+- TV UI = `androidx.tv:tv-material`; phone UI = Compose Material 3. Feature screens must work in both
+  (`LocalIsTv`). TV text input goes through `OntTextField` (gated: read-only until OK).
+
+## Design (docs/design/DESIGN_HANDOFF.md, mockups in docs/design/mockups)
+- Claude Design handoff, TV only. Tokens: `OntTheme.colors` / `OntTheme.type`, `OntDimens`, `OntMotion`.
+  Mockups are 1920x1080 px = 960x540 dp: divide px by 2.
+- Focus = light surface `focusSurface` + dark text + slight scale. Selection = amber. Red = live only.
+- Build focusable things from `OntComponents.kt` (or copy their focus treatment). No emoji; provider
+  names go through `parseChannelName` (keep the raw name for search).
+- Fonts Inter / Inter Tight bundled in `:core:designsystem` res/font (OFL, third_party/fonts).
+  Icons: Phosphor regular as vector drawables `ont_ic_*` (MIT, third_party/icons).
+- Owner choices that differ from the handoff: category names are shown raw (emoji and prefixes
+  kept, provider order); no "Full screen" button (2nd OK on the playing channel, or OK on the
+  preview); OK on a category moves focus into the guide.
+- Rail shows V1 destinations only (TV, Update content, Settings); Home, Search, Movies, Series,
+  Multiview, Sports from the mockup are out of V1.
 
 ## Rules
 - No hard-coded user-visible text: `strings.xml` in `values/` (EN) and `values-fr/` (FR).
@@ -32,6 +64,20 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
 - Never log URLs that contain credentials (Xtream user/password are in the path).
 - `minSdk 24` (current AndroidX floor; Fire OS 6 = API 25). `compileSdk 37`, `targetSdk 36`.
 - Media3 stays on the 1.9.x line until Jellyfin ships an FFmpeg decoder for a newer Media3.
+- Navigation: never `restoreState` the start destination (TV); use `goTo()` in `TvApp.kt`.
+  Restoring it brought the saved Settings stack back on top.
+- `usesCleartextTraffic="true"` is required: most IPTV panels and guides are plain http.
+- Room migrations are required from version 3 on (`autoMigrations` in `OntelevisDatabase`; new NOT
+  NULL columns need `@ColumnInfo(defaultValue = ...)`). Users' playlists must never be wiped. Never
+  type the owner's real provider credentials in the app yourself: keep the data across builds instead.
+- In a `LaunchedEffect`, never change one of its own keys before its suspend work is done: the
+  effect restarts and cancels that work.
+- `java.time` needs core library desugaring (on in the convention plugins).
+- Hilt "Cannot create an instance of ...ViewModel" = a module's KSP output went missing. KSP2 bug: when
+  only a dependency module changes, `kspDebugKotlin` re-runs, generates nothing and wipes its output.
+  `HiltConventionPlugin` clears the KSP caches before each run (always a full run). Do not remove it.
+- Compose keys: an `onKeyEvent` must come before `focusable()` in the modifier chain, or it never
+  receives the keys. A lazy item off screen cannot take focus: `scrollToItem` first.
 - Commit only when asked. Never push without asking.
 
 ## Lessons carried over from VesperTV (reference only, no code copied)

@@ -52,3 +52,6 @@ Translations and bug reports are welcome. Every user-visible string goes in `str
 
 [GPL-3.0](LICENSE). Ontelevis uses the [Jellyfin Media3 FFmpeg decoder](https://github.com/jellyfin/jellyfin-androidx-media),
 which is also GPL-3.0.
+
+Third-party assets: [Inter and Inter Tight](https://github.com/rsms/inter) fonts (SIL Open Font License 1.1,
+`third_party/fonts`) and [Phosphor](https://phosphoricons.com) icons (MIT, `third_party/icons`).

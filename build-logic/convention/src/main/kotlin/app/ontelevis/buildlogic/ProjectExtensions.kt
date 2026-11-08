@@ -32,6 +32,8 @@ internal fun ApplicationExtension.configureAndroid(project: Project) {
     compileOptions {
         sourceCompatibility = JAVA_VERSION
         targetCompatibility = JAVA_VERSION
+        // java.time and other Java 8+ APIs on API 24-25.
+        isCoreLibraryDesugaringEnabled = true
     }
     lint { configureLint() }
 }
@@ -44,6 +46,8 @@ internal fun LibraryExtension.configureAndroid(project: Project) {
     compileOptions {
         sourceCompatibility = JAVA_VERSION
         targetCompatibility = JAVA_VERSION
+        // java.time and other Java 8+ APIs on API 24-25.
+        isCoreLibraryDesugaringEnabled = true
     }
     lint { configureLint() }
 }

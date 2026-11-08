@@ -11,8 +11,10 @@
     <application
         android:name=".OntelevisApplication"
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
+        android:localeConfig="@xml/locales_config"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Ontelevis">

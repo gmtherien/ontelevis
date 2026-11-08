@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_tagline">Lecteur IPTV libre et gratuit. Ajoutez votre propre liste de lecture : aucun contenu n\'est fourni.</string>
+    <string name="content_update">Mise à jour du contenu</string>
+    <string name="content_update_started">Mise à jour de vos listes…</string>
 </resources>

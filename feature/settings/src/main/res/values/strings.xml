@@ -1,5 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feature_settings_title">Settings</string>
-    <string name="feature_settings_placeholder">Playlists, guide, language and parental control.</string>
+    <string name="settings_playlists">Playlists</string>
+    <string name="settings_add_playlist">Add a playlist</string>
+    <string name="settings_kind_m3u">M3U link</string>
+    <string name="settings_kind_xtream">Xtream Codes</string>
+    <string name="settings_m3u_help">Paste the M3U or M3U8 link given by your provider.</string>
+    <string name="settings_xtream_help">Enter the server address, user name and password given by your provider.</string>
+    <string name="settings_field_name">Name (optional)</string>
+    <string name="settings_field_name_hint">My provider</string>
+    <string name="settings_field_url">Playlist link</string>
+    <string name="settings_field_server">Server address</string>
+    <string name="settings_field_username">User name</string>
+    <string name="settings_field_password">Password</string>
+    <string name="settings_add">Add</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_loading_playlist">Loading the playlist…</string>
+    <string name="settings_refresh">Refresh</string>
+    <string name="settings_refreshing">Refreshing…</string>
+    <string name="settings_delete">Delete</string>
+    <string name="settings_delete_confirm">Press again to delete this playlist.</string>
+    <string name="settings_error_required">Required</string>
+    <string name="settings_error_url">Enter a link that starts with http:// or https://</string>
+    <string name="settings_error_network">Could not reach the server. Check the address and your connection.</string>
+    <string name="settings_error_http">The server refused the request. Check the link.</string>
+    <string name="settings_error_auth">Login refused. Check the user name and password, or whether the account has expired.</string>
+    <string name="settings_error_format">The reply is not a playlist this app can read.</string>
+    <string name="settings_error_empty">The playlist has no live channel.</string>
+    <string name="settings_field_epg">Programme guide link (optional)</string>
+    <string name="settings_field_epg_hint">Taken from the playlist when empty</string>
+    <string name="settings_guide_failed">guide unavailable</string>
+    <plurals name="settings_channel_count">
+        <item quantity="one">%d channel</item>
+        <item quantity="other">%d channels</item>
+    </plurals>
+    <plurals name="settings_programme_count">
+        <item quantity="one">%d programme</item>
+        <item quantity="other">%d programmes</item>
+    </plurals>
+    <plurals name="settings_movie_count">
+        <item quantity="one">%d movie</item>
+        <item quantity="other">%d movies</item>
+    </plurals>
+    <plurals name="settings_series_count">
+        <item quantity="one">%d series</item>
+        <item quantity="other">%d series</item>
+    </plurals>
 </resources>
