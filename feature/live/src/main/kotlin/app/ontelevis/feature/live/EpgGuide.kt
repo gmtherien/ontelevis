@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
@@ -34,8 +35,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +81,7 @@ import app.ontelevis.core.model.epg.programState
 import app.ontelevis.core.model.epg.progressOf
 import app.ontelevis.core.model.epg.spanOf
 import app.ontelevis.core.model.parseChannelName
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -197,6 +201,45 @@ internal fun EpgGuide(
             snapshotFlow { timeline.target }.collect { scrollAnim.animateTo(it, tween(220)) }
         }
         val scroll = scrollAnim.value
+        // Up / Down: the block of the next channel at the same time (the current time when moving from
+        // the programme on now). Plain focus search picked whichever block was geometrically closest.
+        val rows = remember { mutableMapOf<Int, RowFocus>() }
+        val anchor = remember { TimeAnchor() }
+        val scope = rememberCoroutineScope()
+        val vertical: (Int, Int, Long?) -> Boolean = { from, step, picked ->
+            // The time chosen with Left / Right stays while moving up and down (null: the current time).
+            val at = anchor.time ?: picked ?: now.toEpochMilli()
+            val target = from + step
+            if (target !in channels.indices) {
+                false
+            } else {
+                scope.launch {
+                    val visibleRows = listState.layoutInfo.visibleItemsInfo
+                    val first = visibleRows.firstOrNull()?.index ?: 0
+                    val last = visibleRows.lastOrNull()?.index ?: 0
+                    // Keep the row fully on screen (the last visible one is often cut).
+                    if (target < first || target >= last) {
+                        listState.scrollToItem(
+                            if (target <
+                                first
+                            ) {
+                                target
+                            } else {
+                                (target - (last - first) + 1).coerceAtLeast(0)
+                            },
+                        )
+                    }
+                    repeat(5) {
+                        withFrameNanos { }
+                        val requester = rows[target]?.at(at)
+                        anchor.movingVertically = true
+                        if (requester != null && runCatching { requester.requestFocus() }.isSuccess) return@launch
+                        anchor.movingVertically = false
+                    }
+                }
+                true
+            }
+        }
         Column(Modifier.fillMaxSize()) {
             GuideHeader(channels.size, window, now, times, total, scroll)
             Box(Modifier.fillMaxWidth().height(OntDimens.Hairline).background(c.line))
@@ -222,6 +265,10 @@ internal fun EpgGuide(
                             ),
                         replayStart = replayTarget?.takeIf { it.first == channel.id }?.second,
                         replayFocus = replayFocus,
+                        rowIndex = index,
+                        rows = rows,
+                        vertical = vertical,
+                        anchor = anchor,
                         actions = actions,
                     )
                 }
@@ -330,9 +377,16 @@ private fun GuideRow(
     /** Start of the programme replayed on this row, to focus it again on return. */
     replayStart: Long?,
     replayFocus: FocusRequester?,
+    rowIndex: Int,
+    rows: MutableMap<Int, RowFocus>,
+    vertical: (from: Int, step: Int, at: Long?) -> Boolean,
+    anchor: TimeAnchor,
     actions: GuideActions,
 ) {
     val c = OntTheme.colors
+    // Time at the left edge of the visible part (reference for programmes that began before it).
+    val viewStartMillis =
+        window.start.toEpochMilli() + (window.duration.toMillis() * (scroll / timeline.total)).toLong()
     val parsed = remember(channel.name) { parseChannelName(channel.name) }
     val meta =
         listOfNotNull(parsed.group ?: groupName.ifEmpty { null }, parsed.tags.joinToString(" ").ifEmpty { null })
@@ -387,6 +441,12 @@ private fun GuideRow(
         TimelineTrack(total, scroll) {
             val visible = remember(programmes, window) { programmes.mapNotNull { p -> visibleSpan(p, window) } }
             if (visible.isEmpty()) {
+                val single = remember { FocusRequester() }
+                DisposableEffect(rowIndex, single) {
+                    val focus = RowFocus(listOf(Long.MIN_VALUE to Long.MAX_VALUE), listOf(single))
+                    rows[rowIndex] = focus
+                    onDispose { if (rows[rowIndex] === focus) rows.remove(rowIndex) }
+                }
                 // No guide for this channel (or nothing in this window): one block over the visible part.
                 val subtitle =
                     stringResource(if (programmes.isEmpty()) R.string.live_continuous_sub else R.string.live_no_info)
@@ -404,20 +464,29 @@ private fun GuideRow(
                     timeline = timeline,
                     scroll = scroll,
                     first = true,
-                    focusTargets = focusTargets,
+                    focusTargets = listOf(single) + focusTargets,
                     previous = null,
                     next = null,
+                    onVertical = { step -> vertical(rowIndex, step, null) },
                     replayable = false,
                     onClick = { actions.open(channel) },
                     onLongClick = { actions.menu(channel) },
-                    onFocused = { actions.focused(channel, null) },
+                    onFocused = {
+                        anchor.focused(null)
+                        actions.focused(channel, null)
+                    },
                     actions = actions,
                 )
             } else {
                 val zone = ZoneId.systemDefault()
-                // Left / Right move block by block in time order. A focused block widens over its
-                // neighbours, so geometric focus search would no longer find the next one.
+                // Left / Right move block by block in time order, Up / Down by time (RowFocus): plain
+                // geometric focus search jumped to odd blocks around very short programmes.
                 val blockFocus = remember(visible.size) { List(visible.size) { FocusRequester() } }
+                DisposableEffect(rowIndex, visible, blockFocus) {
+                    val focus = RowFocus(visible.map { (p, _) -> p.startMillis to p.stopMillis }, blockFocus)
+                    rows[rowIndex] = focus
+                    onDispose { if (rows[rowIndex] === focus) rows.remove(rowIndex) }
+                }
                 val hasCurrent =
                     visible.any { (p, _) ->
                         programState(Instant.ofEpochMilli(p.startMillis), Instant.ofEpochMilli(p.stopMillis), now) ==
@@ -459,10 +528,26 @@ private fun GuideRow(
                                     listOfNotNull(replayFocus.takeIf { programme.startMillis == replayStart }),
                             previous = blockFocus.getOrNull(index - 1),
                             next = blockFocus.getOrNull(index + 1),
+                            // From the programme on now: the next channel's programme on now; else the
+                            // same time (from where this programme shows on screen).
+                            onVertical = { step -> vertical(rowIndex, step, null) },
                             replayable = replayable,
                             onClick = { if (replayable) actions.replay(channel, programme) else actions.open(channel) },
                             onLongClick = { actions.menu(channel) },
-                            onFocused = { actions.focused(channel, programme) },
+                            onFocused = {
+                                // Chosen with Left / Right (or entering the guide): this programme's time
+                                // becomes the reference for Up / Down; the programme on now means "now".
+                                anchor.focused(
+                                    if (state ==
+                                        ProgramState.CURRENT
+                                    ) {
+                                        null
+                                    } else {
+                                        maxOf(programme.startMillis, viewStartMillis)
+                                    },
+                                )
+                                actions.focused(channel, programme)
+                            },
                             actions = actions,
                         )
                     }
@@ -498,6 +583,8 @@ private fun Block(
     focusTargets: List<FocusRequester>,
     previous: FocusRequester?,
     next: FocusRequester?,
+    /** Up (-1) / Down (+1): returns false to let the focus leave the guide (Up from the first row). */
+    onVertical: (Int) -> Boolean,
     replayable: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -558,6 +645,14 @@ private fun Block(
                             true
                         }
 
+                        event.key == Key.DirectionUp -> {
+                            onVertical(-1)
+                        }
+
+                        event.key == Key.DirectionDown -> {
+                            onVertical(1)
+                        }
+
                         // Last block of the row: Right never jumps to another channel.
                         event.key == Key.DirectionRight -> {
                             true
@@ -569,6 +664,36 @@ private fun Block(
                     }
                 },
     )
+}
+
+/** The time Up / Down aim at: set by the block focused with Left / Right, kept by Up / Down. */
+private class TimeAnchor {
+    /** Null: the current time (the user is on the programmes airing now). */
+    var time: Long? = null
+    var movingVertically = false
+
+    fun focused(blockTime: Long?) {
+        if (movingVertically) {
+            movingVertically = false
+        } else {
+            time = blockTime
+        }
+    }
+}
+
+/** One guide row's blocks for Up / Down: their (start, stop) times and focus requesters. */
+private class RowFocus(
+    val spans: List<Pair<Long, Long>>,
+    val requesters: List<FocusRequester>,
+) {
+    /** The block airing at [time]; else the next one; else the last. */
+    fun at(time: Long): FocusRequester? {
+        val index =
+            spans.indexOfFirst { (start, stop) -> time in start until stop }.takeIf { it >= 0 }
+                ?: spans.indexOfFirst { (start, _) -> start >= time }.takeIf { it >= 0 }
+                ?: spans.lastIndex
+        return requesters.getOrNull(index)
+    }
 }
 
 /** Visible part of a programme in the window as (start, end) fractions, or null. */
