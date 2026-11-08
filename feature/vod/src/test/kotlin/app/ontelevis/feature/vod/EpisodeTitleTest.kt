@@ -27,4 +27,13 @@ class EpisodeTitleTest {
         assertEquals("1 h 05", formatDuration(65 * 60_000L))
         assertEquals("42 min", formatDuration(42 * 60_000L))
     }
+
+    @Test
+    fun `alphabetical order skips provider prefixes only`() {
+        assertEquals("Untold", sortTitle("4K: Untold"))
+        assertEquals("Amélie", sortTitle("FR| Amélie"))
+        assertEquals("Heat", sortTitle("EN - Heat"))
+        assertEquals("ALIEN: Romulus", sortTitle("ALIEN: Romulus"))
+        assertEquals("TRON: Legacy", sortTitle("TRON: Legacy"))
+    }
 }

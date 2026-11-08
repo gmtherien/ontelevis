@@ -10,6 +10,7 @@ import app.ontelevis.core.data.db.VOD_SERIES
 import app.ontelevis.core.data.db.VodCategoryEntity
 import app.ontelevis.core.data.db.VodDao
 import app.ontelevis.core.data.network.HttpSource
+import app.ontelevis.core.model.searchKeyOf
 import app.ontelevis.core.parser.ImportedEpisode
 import app.ontelevis.core.parser.ImportedMovie
 import app.ontelevis.core.parser.ImportedSeries
@@ -91,6 +92,7 @@ internal class VodWriter(
                 year = movie.year,
                 added = movie.added,
                 sortOrder = movies++,
+                searchKey = searchKeyOf(movie.name),
             )
         if (movieBatch.size == BATCH_SIZE) flushMovies()
     }
@@ -185,6 +187,7 @@ internal class VodWriter(
             year = year,
             rating = rating,
             sortOrder = sortOrder,
+            searchKey = searchKeyOf(name),
         )
 
     private fun ImportedEpisode.toEntity() =

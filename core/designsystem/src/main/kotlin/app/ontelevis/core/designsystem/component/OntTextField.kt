@@ -68,14 +68,27 @@ fun OntTextField(
     password: Boolean = false,
     imeAction: ImeAction = ImeAction.Next,
     error: String? = null,
+    /** TV: Left on the (not editing) field; lets a screen send it to a precise place. */
+    onLeft: (() -> Unit)? = null,
 ) {
     if (LocalIsTv.current) {
-        TvTextField(value, onValueChange, label, modifier, placeholder, keyboardType, password, imeAction, error)
+        TvTextField(
+            value,
+            onValueChange,
+            label,
+            modifier,
+            placeholder,
+            keyboardType,
+            password,
+            imeAction,
+            error,
+            onLeft,
+        )
     } else {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            label = { androidx.compose.material3.Text(label) },
+            label = if (label.isEmpty()) null else ({ androidx.compose.material3.Text(label) }),
             placeholder = { androidx.compose.material3.Text(placeholder) },
             singleLine = true,
             isError = error != null,
@@ -98,6 +111,7 @@ private fun TvTextField(
     password: Boolean,
     imeAction: ImeAction,
     error: String?,
+    onLeft: (() -> Unit)?,
 ) {
     val c = OntTheme.colors
     val shape = RoundedCornerShape(OntDimens.RadiusButton)
@@ -126,7 +140,9 @@ private fun TvTextField(
     }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = OntTheme.type.meta, color = if (error != null) c.live else c.textMuted)
+        if (label.isNotEmpty()) {
+            Text(label, style = OntTheme.type.meta, color = if (error != null) c.live else c.textMuted)
+        }
         if (editing) {
             BasicTextField(
                 value = value,
@@ -166,7 +182,19 @@ private fun TvTextField(
                 onClick = {
                     if (SystemClock.uptimeMillis() - editEndedAt > REOPEN_GUARD_MS) editing = true
                 },
-                modifier = Modifier.fillMaxWidth().height(OntDimens.ButtonHeight + 4.dp).focusRequester(tileFocus),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(OntDimens.ButtonHeight + 4.dp)
+                        .focusRequester(tileFocus)
+                        .onPreviewKeyEvent { event ->
+                            if (onLeft != null && event.key == Key.DirectionLeft) {
+                                if (event.type == KeyEventType.KeyDown) onLeft()
+                                true
+                            } else {
+                                false
+                            }
+                        },
                 shape = ClickableSurfaceDefaults.shape(shape),
                 colors =
                     ClickableSurfaceDefaults.colors(

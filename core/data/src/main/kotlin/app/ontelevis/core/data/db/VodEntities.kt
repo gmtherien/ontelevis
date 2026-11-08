@@ -1,5 +1,6 @@
 package app.ontelevis.core.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -45,6 +46,8 @@ data class MovieEntity(
     val year: Int?,
     val added: Long,
     val sortOrder: Int,
+    /** [searchKeyOf] the name; empty for rows imported before search existed (until the next refresh). */
+    @ColumnInfo(defaultValue = "") val searchKey: String = "",
 )
 
 @Entity(
@@ -66,6 +69,8 @@ data class SeriesEntity(
     val year: Int?,
     val rating: Double,
     val sortOrder: Int,
+    /** [searchKeyOf] the name; empty for rows imported before search existed (until the next refresh). */
+    @ColumnInfo(defaultValue = "") val searchKey: String = "",
 )
 
 @Entity(
@@ -169,6 +174,38 @@ interface VodDao {
         playlistId: Long,
         group: String,
     ): Flow<List<SeriesEntity>>
+
+    /**
+     * Movies of enabled playlists whose name contains the search: [key] is matched against the
+     * stored search key, [raw] against the name for rows that do not have one yet.
+     */
+    @Query(
+        """
+        SELECT m.* FROM movie m JOIN playlist p ON p.id = m.playlistId
+        WHERE p.enabled = 1 AND (m.searchKey LIKE :key ESCAPE '\' OR (m.searchKey = '' AND m.name LIKE :raw ESCAPE '\'))
+        ORDER BY m.playlistId, m.sortOrder
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchMovies(
+        key: String,
+        raw: String,
+        limit: Int,
+    ): List<MovieEntity>
+
+    @Query(
+        """
+        SELECT s.* FROM series s JOIN playlist p ON p.id = s.playlistId
+        WHERE p.enabled = 1 AND (s.searchKey LIKE :key ESCAPE '\' OR (s.searchKey = '' AND s.name LIKE :raw ESCAPE '\'))
+        ORDER BY s.playlistId, s.sortOrder
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchSeries(
+        key: String,
+        raw: String,
+        limit: Int,
+    ): List<SeriesEntity>
 
     @Query("SELECT * FROM movie WHERE id = :id")
     suspend fun movie(id: String): MovieEntity?

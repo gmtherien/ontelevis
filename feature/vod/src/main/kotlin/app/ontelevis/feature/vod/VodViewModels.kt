@@ -7,6 +7,7 @@ import androidx.media3.common.Player
 import androidx.navigation.toRoute
 import app.ontelevis.core.data.ChannelRepository
 import app.ontelevis.core.data.PlaylistRepository
+import app.ontelevis.core.data.VodPrefs
 import app.ontelevis.core.data.VodRepository
 import app.ontelevis.core.model.Episode
 import app.ontelevis.core.model.Movie
@@ -21,7 +22,9 @@ import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.VodPlayer
 import app.ontelevis.core.player.VodState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,18 +32,24 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.Collator
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import javax.inject.Inject
+import kotlin.random.Random
 
 /** A poster of the grid: a movie or a series, with its resume progress (movies). */
 data class VodItem(
@@ -69,6 +78,19 @@ data class VodBrowseState(
     val favoriteIds: Set<String> = emptySet(),
 )
 
+/** How the posters of a category (or of a search) are ordered. */
+enum class VodSort {
+    /** As the provider lists them. */
+    PROVIDER,
+
+    /** Release year, most recent first. */
+    NEWEST,
+    OLDEST,
+    A_TO_Z,
+    Z_TO_A,
+    RANDOM,
+}
+
 /** Movies or series grid with its categories. The kind is set by the screen ([setKind]). */
 @HiltViewModel
 class VodBrowseViewModel
@@ -76,8 +98,23 @@ class VodBrowseViewModel
     constructor(
         playlists: PlaylistRepository,
         private val vod: VodRepository,
+        private val prefs: VodPrefs,
     ) : ViewModel() {
         private val kind = MutableStateFlow<VodKind?>(null)
+
+        /** Text typed in the search field; 2 characters or more replace the category by results. */
+        private val _query = MutableStateFlow("")
+        val query: StateFlow<String> = _query.asStateFlow()
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val sort: StateFlow<VodSort> =
+            kind
+                .flatMapLatest { k -> if (k == null) flowOf(null) else prefs.sort(k) }
+                .map { name -> VodSort.entries.firstOrNull { it.name == name } ?: VodSort.PROVIDER }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, VodSort.PROVIDER)
+
+        // Random order stays the same while the screen is used (posters must not jump on refresh).
+        private val randomSeed = System.nanoTime()
         private val selectedKey = MutableStateFlow<Pair<Long, String>?>(null)
 
         @OptIn(ExperimentalCoroutinesApi::class)
@@ -116,19 +153,110 @@ class VodBrowseViewModel
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodBrowseState())
 
+        @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+        private val searchQuery: Flow<String?> =
+            _query
+                .map { it.trim().takeIf { q -> q.length >= MIN_SEARCH } }
+                .distinctUntilChanged()
+                // Wait for a pause in the typing before querying (big panels: hundreds of thousands of titles).
+                .debounce { if (it == null) 0 else SEARCH_DEBOUNCE_MS }
+
         @OptIn(ExperimentalCoroutinesApi::class)
-        val items: StateFlow<VodItems> =
-            state
-                .map { it.selected }
-                .distinctUntilChangedBy { it?.key to it?.kind }
-                .flatMapLatest { category ->
+        private val unsorted: Flow<VodItems> =
+            combine(
+                state.map { it.selected }.distinctUntilChangedBy { it?.key to it?.kind },
+                searchQuery,
+                kind,
+            ) { category, search, k -> Triple(category, search, k) }
+                .flatMapLatest { (category, search, k) ->
                     when {
-                        category == null -> flowOf(emptyList())
-                        category.kind == VodKind.MOVIE -> moviesWithProgress(category)
-                        category.isFavorites -> favoriteSeries.map { list -> list.map { it.toItem() } }
-                        else -> vod.observeSeries(category).map { list -> list.map { it.toItem() } }
-                    }.map { VodItems(category?.key, it) }
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodItems())
+                        search != null && k != null -> {
+                            searchItems(k, search).map { VodItems(searchKey(search), it) }
+                        }
+
+                        else -> {
+                            when {
+                                category == null -> flowOf(emptyList())
+                                category.kind == VodKind.MOVIE -> moviesWithProgress(category)
+                                category.isFavorites -> favoriteSeries.map { list -> list.map { it.toItem() } }
+                                else -> vod.observeSeries(category).map { list -> list.map { it.toItem() } }
+                            }.map { VodItems(category?.key, it) }
+                        }
+                    }
+                }
+
+        val items: StateFlow<VodItems> =
+            combine(unsorted, sort) { items, sort -> items.copy(list = sorted(items.list, sort)) }
+                .flowOn(Dispatchers.Default)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodItems())
+
+        fun setQuery(text: String) {
+            _query.value = text
+        }
+
+        fun setSort(value: VodSort) {
+            kind.value?.let { prefs.setSort(it, value.name) }
+        }
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private fun searchItems(
+            kind: VodKind,
+            query: String,
+        ): Flow<List<VodItem>> =
+            when (kind) {
+                VodKind.MOVIE -> {
+                    flow { emit(vod.searchMovies(query)) }.flatMapLatest { movies ->
+                        vod.observeProgress(movies.map { it.id }).map { progress ->
+                            movies.map { it.toItem(progress[it.id]) }
+                        }
+                    }
+                }
+
+                VodKind.SERIES -> {
+                    flow { emit(vod.searchSeries(query).map { it.toItem() }) }
+                }
+            }
+
+        private fun sorted(
+            list: List<VodItem>,
+            sort: VodSort,
+        ): List<VodItem> =
+            when (sort) {
+                VodSort.PROVIDER -> {
+                    list
+                }
+
+                // Unknown years go last in both directions; same year: by title.
+                VodSort.NEWEST -> {
+                    list.sortedWith(
+                        compareBy<VodItem> { it.year == null }.thenByDescending { it.year }.then(byTitle),
+                    )
+                }
+
+                VodSort.OLDEST -> {
+                    list.sortedWith(
+                        compareBy<VodItem> { it.year == null }.thenBy { it.year }.then(byTitle),
+                    )
+                }
+
+                VodSort.A_TO_Z -> {
+                    list.sortedWith(byTitle)
+                }
+
+                VodSort.Z_TO_A -> {
+                    list.sortedWith(byTitle.reversed())
+                }
+
+                VodSort.RANDOM -> {
+                    list.shuffled(Random(randomSeed))
+                }
+            }
+
+        // Accents and case ignored; provider prefixes such as "4K: " or "EN - " do not count.
+        private val byTitle: Comparator<VodItem> =
+            Collator.getInstance().apply { strength = Collator.PRIMARY }.let { collator ->
+                compareBy(collator) { item: VodItem -> sortTitle(item.title) }
+            }
 
         fun setKind(value: VodKind) {
             if (kind.value != value) kind.value = value
@@ -154,6 +282,18 @@ class VodBrowseViewModel
     }
 
 internal val VodCategory.key: Pair<Long, String> get() = playlistId to name
+
+/** Key of a search's results (in place of a category key). */
+internal fun searchKey(query: String): Pair<Long, String> = -2L to query
+
+private const val MIN_SEARCH = 2
+private const val SEARCH_DEBOUNCE_MS = 300L
+
+// Quality tags and two-letter language codes only: "ALIEN: Romulus" or "TRON: Legacy" keep their word.
+private val PROVIDER_PREFIX = Regex("^(?:4K|8K|UHD|FHD|HD|SD|[A-Z]{2})\\s*[:|-]\\s*")
+
+/** Title used for alphabetical order: without a provider prefix ("4K: ", "EN - ", "FR| "). */
+internal fun sortTitle(title: String): String = title.replaceFirst(PROVIDER_PREFIX, "")
 
 private fun Movie.toItem(progress: WatchProgress?) = VodItem(id, name, posterUrl, year, rating, progress?.fraction())
 

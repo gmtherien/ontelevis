@@ -1,6 +1,7 @@
 package app.ontelevis.feature.vod
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -60,6 +62,8 @@ import app.ontelevis.core.designsystem.component.OntListItem
 import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPosterCard
+import app.ontelevis.core.designsystem.component.OntSecondaryButton
+import app.ontelevis.core.designsystem.component.OntTextField
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.SectionLabel
 import app.ontelevis.core.designsystem.theme.OntDimens
@@ -94,7 +98,15 @@ fun VodBrowseScreen(
     val categoryFocus = remember { FocusRequester() }
     val gridEntry = remember { FocusRequester() }
     val categoryList = rememberLazyListState()
-    val gridState = rememberSaveable(state.selected?.key, saver = LazyGridState.Saver) { LazyGridState() }
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val searching = query.trim().length >= 2
+    var sortMenu by remember { mutableStateOf(false) }
+    // Each category, and each search, opens at the top of its posters.
+    val gridState =
+        rememberSaveable(if (searching) itemsState.categoryKey else state.selected?.key, saver = LazyGridState.Saver) {
+            LazyGridState()
+        }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuItem by remember { mutableStateOf<VodItem?>(null) }
@@ -208,6 +220,7 @@ fun VodBrowseScreen(
                             selected = selected,
                             onClick = {
                                 viewModel.select(category)
+                                viewModel.setQuery("")
                                 gridFocusFor = category.key
                             },
                             modifier =
@@ -230,7 +243,47 @@ fun VodBrowseScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OntTopBar(listOfNotNull(title, state.selected?.let { categoryLabel(it) }))
+            OntTopBar(
+                listOfNotNull(
+                    title,
+                    if (searching) {
+                        stringResource(R.string.vod_search_crumb, query.trim())
+                    } else {
+                        state.selected?.let { categoryLabel(it) }
+                    },
+                ),
+            )
+            if (hasCategories) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OntTextField(
+                        value = query,
+                        onValueChange = viewModel::setQuery,
+                        label = "",
+                        placeholder =
+                            stringResource(
+                                if (kind == VodKind.MOVIE) R.string.vod_search_movies else R.string.vod_search_series,
+                            ),
+                        imeAction = ImeAction.Search,
+                        onLeft = { scope.launch { focusCategory() } },
+                        modifier = Modifier.weight(1f, fill = false).width(380.dp),
+                    )
+                    OntSecondaryButton(onClick = { sortMenu = true }) {
+                        Icon(
+                            painterResource(DesignR.drawable.ont_ic_list_bullets),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.vod_sort_button, stringResource(sort.label)),
+                            style = OntTheme.type.button,
+                        )
+                    }
+                }
+            }
             if (!tv && hasCategories) PhoneCategories(state, viewModel::select)
             when {
                 state.playlists == null -> {}
@@ -262,6 +315,10 @@ fun VodBrowseScreen(
                             },
                         ),
                     )
+                }
+
+                searching && items.isEmpty() && itemsState.categoryKey == searchKey(query.trim()) -> {
+                    Message(stringResource(R.string.vod_search_none, query.trim()))
                 }
 
                 favoritesEmpty -> {
@@ -333,6 +390,20 @@ fun VodBrowseScreen(
             }
         }
     }
+    if (sortMenu) {
+        OntMenu(
+            title = stringResource(R.string.vod_sort_title),
+            options =
+                VodSort.entries.map { option ->
+                    val label = stringResource(option.label)
+                    OntMenuOption(if (option == sort) "✓  $label" else label) { viewModel.setSort(option) }
+                },
+            onDismiss = { sortMenu = false },
+        )
+    }
+    // Back while a search is shown: the category comes back (the field is emptied).
+    BackHandler(enabled = searching) { viewModel.setQuery("") }
+
     menuItem?.let { item ->
         val favorite = item.id in state.favoriteIds
         val added = stringResource(R.string.vod_favorite_added)
@@ -408,3 +479,14 @@ private fun PhoneCategories(
         }
     }
 }
+
+private val VodSort.label: Int
+    get() =
+        when (this) {
+            VodSort.PROVIDER -> R.string.vod_sort_provider
+            VodSort.NEWEST -> R.string.vod_sort_newest
+            VodSort.OLDEST -> R.string.vod_sort_oldest
+            VodSort.A_TO_Z -> R.string.vod_sort_a_z
+            VodSort.Z_TO_A -> R.string.vod_sort_z_a
+            VodSort.RANDOM -> R.string.vod_sort_random
+        }

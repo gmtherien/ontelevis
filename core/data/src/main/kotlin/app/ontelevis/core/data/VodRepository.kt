@@ -19,6 +19,7 @@ import app.ontelevis.core.model.Series
 import app.ontelevis.core.model.VodCategory
 import app.ontelevis.core.model.VodKind
 import app.ontelevis.core.model.WatchProgress
+import app.ontelevis.core.model.searchKeyOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -35,6 +36,17 @@ interface VodRepository {
     fun observeFavoriteSeries(): Flow<List<Series>>
 
     fun observeFavoriteIds(): Flow<Set<String>>
+
+    /** Movies or series of the enabled playlists whose name contains [query] (accents and case ignored). */
+    suspend fun searchMovies(
+        query: String,
+        limit: Int = SEARCH_LIMIT,
+    ): List<Movie>
+
+    suspend fun searchSeries(
+        query: String,
+        limit: Int = SEARCH_LIMIT,
+    ): List<Series>
 
     /** Adds or removes a movie / series from the favourites; returns true when it is now a favourite. */
     suspend fun toggleFavorite(
@@ -91,6 +103,22 @@ internal class RoomVodRepository
             library.observeFavoriteSeries().map { rows -> rows.map { it.toModel() } }
 
         override fun observeFavoriteIds(): Flow<Set<String>> = library.observeVodFavoriteIds().map { it.toSet() }
+
+        override suspend fun searchMovies(
+            query: String,
+            limit: Int,
+        ): List<Movie> =
+            dao.searchMovies(likePattern(searchKeyOf(query)), likePattern(query.trim()), limit).map {
+                it.toModel()
+            }
+
+        override suspend fun searchSeries(
+            query: String,
+            limit: Int,
+        ): List<Series> =
+            dao.searchSeries(likePattern(searchKeyOf(query)), likePattern(query.trim()), limit).map {
+                it.toModel()
+            }
 
         override suspend fun toggleFavorite(
             contentId: String,
@@ -167,6 +195,13 @@ internal class RoomVodRepository
     }
 
 private val VodKind.key: String get() = if (this == VodKind.MOVIE) VOD_MOVIE else VOD_SERIES
+
+/** Search results are capped: a two-letter search on a big panel matches tens of thousands of titles. */
+const val SEARCH_LIMIT = 500
+
+/** `%text%` for LIKE, with LIKE's own wildcards in the text escaped. */
+private fun likePattern(text: String): String =
+    "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 private fun MovieEntity.toModel() = Movie(id, playlistId, name, groupName, streamUrl, posterUrl, rating, year)
 
