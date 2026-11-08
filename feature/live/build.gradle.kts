@@ -9,4 +9,5 @@ android {
 dependencies {
     implementation(project(":core:player"))
     implementation(libs.media3.ui.compose)
+    implementation(libs.androidx.activity.compose)
 }

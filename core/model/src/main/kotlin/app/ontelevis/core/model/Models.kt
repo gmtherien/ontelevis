@@ -57,7 +57,27 @@ data class ChannelGroup(
     /** Provider group name; empty for channels without a group. */
     val name: String,
     val channelCount: Int,
-)
+    /** Hidden by the user: left out of the categories unless they ask to see hidden ones. */
+    val hidden: Boolean = false,
+) {
+    /** One of the user's shortcuts (Favourites, History) rather than a provider category. */
+    val shortcut: Shortcut? get() = Shortcut.entries.firstOrNull { it.playlistId == playlistId }
+
+    companion object {
+        fun of(
+            shortcut: Shortcut,
+            channelCount: Int = 0,
+        ) = ChannelGroup(shortcut.playlistId, "", channelCount)
+    }
+}
+
+/** Categories made by the app from the user's own lists. Their negative ids never clash with playlists. */
+enum class Shortcut(
+    val playlistId: Long,
+) {
+    FAVORITES(-1),
+    HISTORY(-2),
+}
 
 data class Channel(
     /** Unique inside the app: `playlistId::rawId`. */

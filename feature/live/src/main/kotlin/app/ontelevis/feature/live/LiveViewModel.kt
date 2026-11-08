@@ -11,6 +11,7 @@ import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.ChannelGroup
 import app.ontelevis.core.model.Playlist
 import app.ontelevis.core.model.Programme
+import app.ontelevis.core.model.Shortcut
 import app.ontelevis.core.model.epg.EpgWindow
 import app.ontelevis.core.player.LivePlayer
 import app.ontelevis.core.player.LiveState
@@ -40,8 +41,22 @@ import javax.inject.Inject
 data class LiveUiState(
     /** Null while loading. */
     val playlists: List<Playlist>? = null,
+    /** Favourites and History, with their channel counts. */
+    val shortcuts: List<ChannelGroup> = emptyList(),
+    /** Provider categories shown in the panel (hidden ones only while [showHidden]). */
     val groups: List<ChannelGroup> = emptyList(),
+    /** At least one playlist has categories (some may be hidden). */
+    val hasCategories: Boolean = false,
+    val hiddenCount: Int = 0,
+    val showHidden: Boolean = false,
     val selectedGroup: ChannelGroup? = null,
+    val favoriteIds: Set<String> = emptySet(),
+)
+
+/** Channels of one category; [groupKey] tells which, so focus waits for the right list. */
+data class GroupChannels(
+    val groupKey: Pair<Long, String>? = null,
+    val list: List<Channel> = emptyList(),
 )
 
 @HiltViewModel
@@ -55,26 +70,55 @@ class LiveViewModel
         private val prefs: PlaybackPrefs,
     ) : ViewModel() {
         private val selectedKey = MutableStateFlow<Pair<Long, String>?>(null)
+        private val showHidden = MutableStateFlow(false)
+        private val favorites = channelRepository.observeFavorites()
+        private val history = channelRepository.observeHistory()
+
+        private val shortcuts: Flow<List<ChannelGroup>> =
+            combine(favorites, history) { fav, hist ->
+                listOf(ChannelGroup.of(Shortcut.FAVORITES, fav.size), ChannelGroup.of(Shortcut.HISTORY, hist.size))
+            }
 
         val state: StateFlow<LiveUiState> =
             combine(
                 playlistRepository.observePlaylists(),
                 channelRepository.observeGroups(),
-                selectedKey,
-            ) { playlists, groups, key ->
-                val selected = groups.firstOrNull { it.key == key } ?: groups.firstOrNull()
-                LiveUiState(playlists, groups, selected)
+                shortcuts,
+                combine(selectedKey, showHidden, channelRepository.observeFavoriteIds()) { a, b, c -> Triple(a, b, c) },
+            ) { playlists, all, shortcuts, (key, showHidden, favoriteIds) ->
+                val hiddenCount = all.count { it.hidden }
+                val shown = if (showHidden || hiddenCount == 0) all else all.filter { !it.hidden }
+                val selected =
+                    shortcuts.firstOrNull { it.key == key }
+                        ?: shown.firstOrNull { it.key == key }
+                        ?: shown.firstOrNull()
+                        ?: shortcuts.firstOrNull { it.channelCount > 0 }
+                LiveUiState(
+                    playlists = playlists,
+                    shortcuts = shortcuts,
+                    groups = shown,
+                    hasCategories = all.isNotEmpty(),
+                    hiddenCount = hiddenCount,
+                    showHidden = showHidden && hiddenCount > 0,
+                    selectedGroup = selected,
+                    favoriteIds = favoriteIds,
+                )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveUiState())
 
         @OptIn(ExperimentalCoroutinesApi::class)
-        val channels: StateFlow<List<Channel>> =
+        val channels: StateFlow<GroupChannels> =
             state
                 .map { it.selectedGroup }
                 // Channel counts change on refresh; only a different group means new channels.
                 .distinctUntilChangedBy { it?.key }
                 .flatMapLatest { group ->
-                    if (group == null) flowOf(emptyList()) else channelRepository.observeChannels(group)
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+                    when {
+                        group == null -> flowOf(emptyList())
+                        group.shortcut == Shortcut.FAVORITES -> favorites
+                        group.shortcut == Shortcut.HISTORY -> history
+                        else -> channelRepository.observeChannels(group)
+                    }.map { GroupChannels(group?.key, it) }
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GroupChannels())
 
         val live: StateFlow<LiveState> = livePlayer.state
 
@@ -102,7 +146,7 @@ class LiveViewModel
         /** Programmes of the visible category in the guide window, by channel id. */
         @OptIn(ExperimentalCoroutinesApi::class)
         val programmes: StateFlow<Map<String, List<Programme>>> =
-            combine(channels, window, epgStamp) { channels, window, _ -> channels to window }
+            combine(channels, window, epgStamp) { channels, window, _ -> channels.list to window }
                 .mapLatest { (channels, window) ->
                     epgRepository.programmes(channels, window.start.toEpochMilli(), window.end.toEpochMilli())
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -133,6 +177,14 @@ class LiveViewModel
                     .distinctUntilChanged()
                     .collect { prefs.lastChannelId = it }
             }
+            // ...and add it to the History shortcut.
+            viewModelScope.launch {
+                livePlayer.state
+                    .map { it.channel }
+                    .filterNotNull()
+                    .distinctUntilChangedBy { it.id }
+                    .collect { channelRepository.recordWatched(it) }
+            }
         }
 
         fun select(group: ChannelGroup) {
@@ -141,7 +193,32 @@ class LiveViewModel
 
         /** Plays [channel] in the preview; CH+ / CH- then move through the current category. */
         fun play(channel: Channel) {
-            livePlayer.play(channel, channels.value)
+            livePlayer.play(channel, channels.value.list)
+        }
+
+        /** Returns true when [channel] is now a favourite. */
+        suspend fun toggleFavorite(channel: Channel): Boolean = channelRepository.toggleFavorite(channel)
+
+        fun moveGroup(
+            group: ChannelGroup,
+            step: Int,
+        ) {
+            viewModelScope.launch { channelRepository.moveGroup(group, step) }
+        }
+
+        fun setGroupHidden(
+            group: ChannelGroup,
+            hidden: Boolean,
+        ) {
+            viewModelScope.launch { channelRepository.setGroupHidden(group, hidden) }
+        }
+
+        fun toggleShowHidden() {
+            showHidden.value = !showHidden.value
+        }
+
+        fun clearHistory() {
+            viewModelScope.launch { channelRepository.clearHistory() }
         }
 
         /** Startup: play the last channel in the preview and open its category. */

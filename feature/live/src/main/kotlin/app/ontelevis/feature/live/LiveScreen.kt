@@ -1,7 +1,9 @@
 package app.ontelevis.feature.live
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +50,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -64,6 +72,8 @@ import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.ChannelLogoTile
 import app.ontelevis.core.designsystem.component.LocalIsTv
 import app.ontelevis.core.designsystem.component.OntListItem
+import app.ontelevis.core.designsystem.component.OntMenu
+import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPrimaryButton
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.SectionLabel
@@ -73,6 +83,7 @@ import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.ChannelGroup
 import app.ontelevis.core.model.Programme
+import app.ontelevis.core.model.Shortcut
 import app.ontelevis.core.model.epg.EpgWindow
 import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.LiveState
@@ -90,6 +101,12 @@ private class LiveActions(
     val play: (Channel) -> Unit,
     val addPlaylist: () -> Unit,
     val fullscreen: () -> Unit,
+    /** Returns true when the channel is now a favourite. */
+    val toggleFavorite: suspend (Channel) -> Boolean,
+    val moveGroup: (ChannelGroup, Int) -> Unit,
+    val setGroupHidden: (ChannelGroup, Boolean) -> Unit,
+    val toggleShowHidden: () -> Unit,
+    val clearHistory: () -> Unit,
 )
 
 /**
@@ -113,7 +130,17 @@ fun LiveScreen(
     val playingProgrammes by viewModel.playingProgrammes.collectAsStateWithLifecycle()
     val actions =
         remember(viewModel, onAddPlaylist, onOpenFullscreen) {
-            LiveActions(viewModel::select, viewModel::play, onAddPlaylist, onOpenFullscreen)
+            LiveActions(
+                select = viewModel::select,
+                play = viewModel::play,
+                addPlaylist = onAddPlaylist,
+                fullscreen = onOpenFullscreen,
+                toggleFavorite = viewModel::toggleFavorite,
+                moveGroup = viewModel::moveGroup,
+                setGroupHidden = viewModel::setGroupHidden,
+                toggleShowHidden = viewModel::toggleShowHidden,
+                clearHistory = viewModel::clearHistory,
+            )
         }
     if (LocalIsTv.current) {
         TvLive(
@@ -126,14 +153,20 @@ fun LiveScreen(
             modifier,
         )
     } else {
-        PhoneLive(state, channels, programmes, now, actions, modifier)
+        PhoneLive(state, channels.list, programmes, now, actions, modifier)
     }
 }
 
 @Composable
 private fun groupLabel(group: ChannelGroup): String =
-    // Category names stay exactly as the provider wrote them (emoji and prefixes included).
-    group.name.ifEmpty { stringResource(R.string.live_uncategorized) }
+    when (group.shortcut) {
+        Shortcut.FAVORITES -> stringResource(R.string.live_favorites)
+
+        Shortcut.HISTORY -> stringResource(R.string.live_history)
+
+        // Category names stay exactly as the provider wrote them (emoji and prefixes included).
+        null -> group.name.ifEmpty { stringResource(R.string.live_uncategorized) }
+    }
 
 /** What to show instead of the channels, if anything. */
 private enum class LiveStatus { LOADING, NO_PLAYLIST, NOT_LOADED, FAILED, READY }
@@ -143,7 +176,7 @@ private val LiveUiState.status: LiveStatus
         when {
             playlists == null -> LiveStatus.LOADING
             playlists.isEmpty() -> LiveStatus.NO_PLAYLIST
-            groups.isNotEmpty() -> LiveStatus.READY
+            hasCategories -> LiveStatus.READY
             playlists.any { it.lastError != null } -> LiveStatus.FAILED
             else -> LiveStatus.NOT_LOADED
         }
@@ -160,10 +193,47 @@ private class GuideData(
 /** Where focus goes back to after the full-screen player (§6: restore the previous element). */
 private enum class ReturnFocus { NONE, GUIDE, PREVIEW }
 
+/** One row of the categories panel. */
+private sealed interface PanelEntry {
+    val key: String
+
+    data class Label(
+        val text: Int,
+    ) : PanelEntry {
+        override val key get() = "label:$text"
+    }
+
+    data class Group(
+        val group: ChannelGroup,
+    ) : PanelEntry {
+        override val key get() = group.entryKey
+    }
+
+    /** "Show / hide the hidden categories". */
+    data class HiddenToggle(
+        val count: Int,
+        val showing: Boolean,
+    ) : PanelEntry {
+        override val key get() = "hidden-toggle"
+    }
+}
+
+private val ChannelGroup.entryKey: String get() = "g:$playlistId/$name"
+
+private fun panelEntries(state: LiveUiState): List<PanelEntry> =
+    buildList {
+        add(PanelEntry.Label(R.string.live_section_shortcuts))
+        state.shortcuts.forEach { add(PanelEntry.Group(it)) }
+        // With the shortcuts, not after the categories: big panels list hundreds of them.
+        if (state.hiddenCount > 0) add(PanelEntry.HiddenToggle(state.hiddenCount, state.showHidden))
+        add(PanelEntry.Label(R.string.live_section_categories))
+        state.groups.forEach { add(PanelEntry.Group(it)) }
+    }
+
 @Composable
 private fun TvLive(
     state: LiveUiState,
-    channels: List<Channel>,
+    channelsState: GroupChannels,
     guide: GuideData,
     live: LiveState,
     player: Player?,
@@ -171,9 +241,11 @@ private fun TvLive(
     modifier: Modifier,
 ) {
     val c = OntTheme.colors
+    val context = LocalContext.current
     val title = stringResource(R.string.feature_live_title)
     val scope = rememberCoroutineScope()
-    val categoryFocus = remember { FocusRequester() }
+    val channels = channelsState.list
+    val panelFocus = remember { FocusRequester() }
     val guideEntry = remember { FocusRequester() }
     val playingRowFocus = remember { FocusRequester() }
     val previewFocus = remember { FocusRequester() }
@@ -184,30 +256,45 @@ private fun TvLive(
     var returnFocus by rememberSaveable { mutableStateOf(ReturnFocus.NONE) }
     // OK on a category: focus follows into the guide once that category's channels are loaded.
     var guideFocusPending by remember { mutableStateOf(false) }
+    // Panel row holding the focus requester: the selected category unless another row needs focus.
+    var panelFocusKey by remember { mutableStateOf<String?>(null) }
+    var channelMenu by remember { mutableStateOf<Channel?>(null) }
+    var groupMenu by remember { mutableStateOf<ChannelGroup?>(null) }
+    // Category being moved with Up / Down (hold OK > Move).
+    var moving by remember { mutableStateOf<ChannelGroup?>(null) }
+    val entries = remember(state) { panelEntries(state) }
     val latestState by rememberUpdatedState(state)
-    val latestChannels by rememberUpdatedState(channels)
+    val latestEntries by rememberUpdatedState(entries)
+    val latestChannels by rememberUpdatedState(channelsState)
     val latestLive by rememberUpdatedState(live)
     val playingRowVisible by remember(guideList) {
         derivedStateOf { guideList.layoutInfo.visibleItemsInfo.any { it.key == latestLive.channel?.id } }
     }
 
     // A lazy item off screen cannot take focus: scroll it in first.
-    suspend fun focusCategory() {
-        val s = latestState
-        val index = s.groups.indexOfFirst { it.key == s.selectedGroup?.key }.coerceAtLeast(0)
-        // Scroll only when the category is off screen: moving a list that already shows it looks like
+    suspend fun focusPanel(key: String?) {
+        val target = key ?: return
+        panelFocusKey = target
+        withFrameNanos { }
+        val index = latestEntries.indexOfFirst { it.key == target }
+        if (index < 0) return
+        // Scroll only when the row is off screen: moving a list that already shows it looks like
         // focus landed somewhere else.
         val onScreen = categoryList.layoutInfo.visibleItemsInfo.any { it.index == index }
         if (!onScreen) {
             categoryList.scrollToItem((index - 2).coerceAtLeast(0))
             withFrameNanos { }
         }
-        runCatching { categoryFocus.requestFocus() }
+        runCatching { panelFocus.requestFocus() }
     }
+
+    suspend fun focusCategory() = focusPanel(latestState.selectedGroup?.entryKey)
 
     // The channel in the player first (its current programme), else the first row.
     suspend fun focusGuide() {
-        val playingIndex = latestChannels.indexOfFirst { it.id == latestLive.channel?.id }
+        val list = latestChannels.list
+        if (list.isEmpty()) return focusCategory()
+        val playingIndex = list.indexOfFirst { it.id == latestLive.channel?.id }
         if (playingIndex >= 0) {
             guideList.scrollToItem((playingIndex - 1).coerceAtLeast(0))
             withFrameNanos { }
@@ -218,13 +305,13 @@ private fun TvLive(
     }
 
     // The remote must always have something focused: decide when the categories arrive.
-    val hasGroups = state.groups.isNotEmpty()
-    LaunchedEffect(hasGroups) {
-        if (!hasGroups) return@LaunchedEffect
+    val ready = state.hasCategories
+    LaunchedEffect(ready) {
+        if (!ready) return@LaunchedEffect
         when (returnFocus) {
             ReturnFocus.GUIDE -> {
                 returnFocus = ReturnFocus.NONE
-                withTimeoutOrNull(2_000) { snapshotFlow { latestChannels }.first { it.isNotEmpty() } }
+                withTimeoutOrNull(2_000) { snapshotFlow { latestChannels.list }.first { it.isNotEmpty() } }
                 focusGuide()
             }
 
@@ -241,15 +328,21 @@ private fun TvLive(
             }
         }
     }
-    LaunchedEffect(channels, guideFocusPending) {
+    LaunchedEffect(channelsState, guideFocusPending) {
         val group = latestState.selectedGroup ?: return@LaunchedEffect
-        val loaded = channels.firstOrNull()?.let { it.playlistId == group.playlistId && it.group == group.name } == true
-        if (guideFocusPending && loaded) {
-            focusGuide()
+        if (guideFocusPending && channelsState.groupKey == group.key) {
+            // An empty shortcut has nothing to focus: stay on the category.
+            if (channelsState.list.isNotEmpty()) focusGuide()
             // Reset last: this flag is a key of the effect, resetting it first cancelled the scroll above.
             guideFocusPending = false
         }
     }
+    // The moved category keeps the focus at its new place.
+    val movingKey = moving?.entryKey
+    LaunchedEffect(movingKey, entries) {
+        if (movingKey != null) focusPanel(movingKey)
+    }
+    BackHandler(enabled = moving != null) { moving = null }
 
     val guideActions =
         GuideActions(
@@ -263,21 +356,32 @@ private fun TvLive(
                 }
             },
             leftEdge = { scope.launch { focusCategory() } },
+            menu = { channelMenu = it },
         )
 
     Row(modifier.fillMaxSize().background(c.background)) {
         CategoryPanel(
             title = title,
-            groups = state.groups,
+            entries = entries,
             selected = state.selectedGroup,
+            moving = moving,
             onSelect = { group ->
                 actions.select(group)
                 guideFocusPending = true
             },
+            onMenu = { groupMenu = it },
+            onMove = { step -> moving?.let { actions.moveGroup(it, step) } },
+            onEndMove = {
+                val done = moving
+                moving = null
+                scope.launch { focusPanel(done?.entryKey) }
+            },
+            onToggleHidden = actions.toggleShowHidden,
             // Right from a category: the channel in the player when its row is on screen (§6), else the
             // current programme of the first visible row.
             rightTarget = (if (playingRowVisible) playingRowFocus else guideEntry).takeIf { channels.isNotEmpty() },
-            selectedFocus = categoryFocus,
+            focusKey = panelFocusKey ?: state.selectedGroup?.entryKey,
+            focusRequester = panelFocus,
             listState = categoryList,
             modifier = Modifier.width(OntDimens.CategoryPanelWidth).fillMaxHeight(),
         )
@@ -324,20 +428,119 @@ private fun TvLive(
                             }
                         },
                     )
-                    EpgGuide(
-                        channels = channels,
-                        programmes = guide.programmes,
-                        window = guide.window,
-                        now = guide.now,
-                        playingId = live.channel?.id,
-                        groupName = state.selectedGroup?.let { groupLabel(it) }.orEmpty(),
-                        listState = guideList,
-                        entry = guideEntry,
-                        playingRowFocus = playingRowFocus,
-                        actions = guideActions,
+                    val shortcut = state.selectedGroup?.shortcut
+                    if (shortcut != null && channels.isEmpty() && channelsState.groupKey == groupKey) {
+                        TvMessage(
+                            stringResource(
+                                if (shortcut ==
+                                    Shortcut.FAVORITES
+                                ) {
+                                    R.string.live_favorites_empty
+                                } else {
+                                    R.string.live_history_empty
+                                },
+                            ),
+                        )
+                    } else {
+                        EpgGuide(
+                            channels = channels,
+                            programmes = guide.programmes,
+                            window = guide.window,
+                            now = guide.now,
+                            playingId = live.channel?.id,
+                            favoriteIds = state.favoriteIds,
+                            groupName = state.selectedGroup?.let { groupLabel(it) }.orEmpty(),
+                            listState = guideList,
+                            entry = guideEntry,
+                            playingRowFocus = playingRowFocus,
+                            actions = guideActions,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    channelMenu?.let { channel ->
+        val favorite = channel.id in state.favoriteIds
+        val added = stringResource(R.string.live_favorite_added)
+        val removed = stringResource(R.string.live_favorite_removed)
+        OntMenu(
+            title = parseChannelName(channel.name).title,
+            options =
+                listOf(
+                    OntMenuOption(
+                        stringResource(
+                            if (favorite) R.string.live_menu_remove_favorite else R.string.live_menu_add_favorite,
+                        ),
+                    ) {
+                        scope.launch {
+                            val inFavorites = state.selectedGroup?.shortcut == Shortcut.FAVORITES
+                            val nowFavorite = actions.toggleFavorite(channel)
+                            Toast.makeText(context, if (nowFavorite) added else removed, Toast.LENGTH_SHORT).show()
+                            if (inFavorites && !nowFavorite) {
+                                // Its row just left the Favourites list: focus the next one, or the category.
+                                withTimeoutOrNull(1_000) {
+                                    snapshotFlow { latestChannels.list }.first { list ->
+                                        list.none { it.id == channel.id }
+                                    }
+                                }
+                                guideList.scrollToItem(guideList.firstVisibleItemIndex)
+                                focusGuide()
+                            }
+                        }
+                    },
+                ),
+            onDismiss = { channelMenu = null },
+        )
+    }
+
+    groupMenu?.let { group ->
+        val options =
+            when (group.shortcut) {
+                Shortcut.HISTORY -> {
+                    listOf(OntMenuOption(stringResource(R.string.live_menu_clear_history)) { actions.clearHistory() })
+                }
+
+                Shortcut.FAVORITES -> {
+                    emptyList()
+                }
+
+                null -> {
+                    listOf(
+                        OntMenuOption(stringResource(R.string.live_menu_move)) { moving = group },
+                        OntMenuOption(
+                            stringResource(if (group.hidden) R.string.live_menu_unhide else R.string.live_menu_hide),
+                        ) {
+                            val hiding = !group.hidden
+                            // A hidden category leaves the list (unless hidden ones are shown): its
+                            // neighbour takes the focus.
+                            val groups = state.groups
+                            val index = groups.indexOfFirst { it.key == group.key }
+                            val neighbour =
+                                if (hiding && !state.showHidden) {
+                                    (groups.getOrNull(index + 1) ?: groups.getOrNull(index - 1))?.entryKey
+                                        ?: Shortcut.FAVORITES.let { ChannelGroup.of(it).entryKey }
+                                } else {
+                                    group.entryKey
+                                }
+                            actions.setGroupHidden(group, hiding)
+                            scope.launch {
+                                withTimeoutOrNull(1_000) {
+                                    snapshotFlow { latestState.groups }.first { list ->
+                                        list.none { it.key == group.key && it.hidden != hiding }
+                                    }
+                                }
+                                focusPanel(neighbour)
+                            }
+                        },
                     )
                 }
             }
+        if (options.isEmpty()) {
+            groupMenu = null
+        } else {
+            OntMenu(title = groupLabel(group), options = options, onDismiss = { groupMenu = null })
         }
     }
 }
@@ -345,11 +548,17 @@ private fun TvLive(
 @Composable
 private fun CategoryPanel(
     title: String,
-    groups: List<ChannelGroup>,
+    entries: List<PanelEntry>,
     selected: ChannelGroup?,
+    moving: ChannelGroup?,
     onSelect: (ChannelGroup) -> Unit,
+    onMenu: (ChannelGroup) -> Unit,
+    onMove: (step: Int) -> Unit,
+    onEndMove: () -> Unit,
+    onToggleHidden: () -> Unit,
     rightTarget: FocusRequester?,
-    selectedFocus: FocusRequester,
+    focusKey: String?,
+    focusRequester: FocusRequester,
     listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
@@ -362,31 +571,112 @@ private fun CategoryPanel(
                 }.padding(start = 16.dp, end = 16.dp, top = OntDimens.SafeVertical),
     ) {
         Text(title, style = OntTheme.type.title, color = c.textPrimary, modifier = Modifier.padding(start = 10.dp))
-        Spacer(Modifier.height(24.dp))
-        if (groups.isNotEmpty()) {
-            SectionLabel(stringResource(R.string.live_section_categories), Modifier.padding(start = 10.dp))
-            Spacer(Modifier.height(8.dp))
-        }
+        Spacer(Modifier.height(16.dp))
         LazyColumn(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
         ) {
-            items(groups, key = { "${it.playlistId}/${it.name}" }) { group ->
-                val isSelected = group.key == selected?.key
-                OntListItem(
-                    text = groupLabel(group),
-                    selected = isSelected,
-                    onClick = { onSelect(group) },
-                    modifier =
-                        Modifier
-                            .focusProperties { if (rightTarget != null) right = rightTarget }
-                            .then(if (isSelected) Modifier.focusRequester(selectedFocus) else Modifier),
-                )
+            items(entries, key = { it.key }) { entry ->
+                val focusModifier =
+                    Modifier
+                        .focusProperties { if (rightTarget != null) right = rightTarget }
+                        .then(if (entry.key == focusKey) Modifier.focusRequester(focusRequester) else Modifier)
+                when (entry) {
+                    is PanelEntry.Label -> {
+                        SectionLabel(
+                            stringResource(entry.text),
+                            Modifier.padding(start = 10.dp, top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+
+                    is PanelEntry.Group -> {
+                        val group = entry.group
+                        val isMoving = moving?.key == group.key
+                        OntListItem(
+                            text = groupLabel(group),
+                            selected = group.key == selected?.key,
+                            onClick = { onSelect(group) },
+                            onLongClick = { onMenu(group) }.takeIf { group.shortcut != Shortcut.FAVORITES },
+                            dimmed = group.hidden,
+                            trailingTag =
+                                when {
+                                    isMoving -> "▲▼"
+                                    group.hidden -> stringResource(R.string.live_hidden_tag)
+                                    else -> null
+                                },
+                            leadingIcon =
+                                group.shortcut?.let { shortcut ->
+                                    { tint ->
+                                        Icon(
+                                            painterResource(
+                                                if (shortcut == Shortcut.FAVORITES) {
+                                                    DesignR.drawable.ont_ic_star
+                                                } else {
+                                                    DesignR.drawable.ont_ic_clock_counter_clockwise
+                                                },
+                                            ),
+                                            contentDescription = null,
+                                            tint = tint,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                },
+                            modifier =
+                                focusModifier.then(
+                                    if (isMoving) Modifier.moveKeys(onMove, onEndMove) else Modifier,
+                                ),
+                        )
+                    }
+
+                    is PanelEntry.HiddenToggle -> {
+                        OntListItem(
+                            text = stringResource(R.string.live_hidden_categories, entry.count),
+                            // Highlighted while the hidden categories are listed (dimmed) below.
+                            selected = entry.showing,
+                            onClick = onToggleHidden,
+                            leadingIcon = { tint ->
+                                Icon(
+                                    painterResource(DesignR.drawable.ont_ic_list_bullets),
+                                    contentDescription = null,
+                                    tint = tint,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                            modifier = focusModifier,
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+/** Move mode: Up / Down move the category, OK or Back end it, the other keys do nothing. */
+private fun Modifier.moveKeys(
+    onMove: (Int) -> Unit,
+    onEnd: () -> Unit,
+): Modifier =
+    onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown) {
+            when (event.key) {
+                Key.DirectionUp -> {
+                    onMove(-1)
+                }
+
+                Key.DirectionDown -> {
+                    onMove(1)
+                }
+
+                Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back, Key.Escape -> {
+                    onEnd()
+                }
+
+                else -> {}
+            }
+        }
+        true
+    }
 
 @Composable
 private fun TvNoPlaylist(onAddPlaylist: () -> Unit) {
@@ -433,6 +723,10 @@ private fun PhoneLive(
     actions: LiveActions,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val added = stringResource(R.string.live_favorite_added)
+    val removed = stringResource(R.string.live_favorite_removed)
     Column(modifier.fillMaxSize()) {
         PhoneText(
             stringResource(R.string.feature_live_title),
@@ -470,7 +764,7 @@ private fun PhoneLive(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(state.groups, key = { "${it.playlistId}/${it.name}" }) { group ->
+                    items(state.shortcuts + state.groups, key = { "${it.playlistId}/${it.name}" }) { group ->
                         FilterChip(
                             selected = group.key == state.selectedGroup?.key,
                             onClick = { actions.select(group) },
@@ -483,10 +777,21 @@ private fun PhoneLive(
                         val parsed = parseChannelName(channel.name)
                         ListItem(
                             modifier =
-                                Modifier.clickable {
-                                    actions.play(channel)
-                                    actions.fullscreen()
-                                },
+                                Modifier.combinedClickable(
+                                    onClick = {
+                                        actions.play(channel)
+                                        actions.fullscreen()
+                                    },
+                                    // Long press: add to / remove from the favourites.
+                                    onLongClick = {
+                                        scope.launch {
+                                            val favorite = actions.toggleFavorite(channel)
+                                            Toast
+                                                .makeText(context, if (favorite) added else removed, Toast.LENGTH_SHORT)
+                                                .show()
+                                        }
+                                    },
+                                ),
                             headlineContent = { PhoneText(parsed.title) },
                             leadingContent = { PhoneText(channel.number.toString()) },
                             // What is on now, from the guide, else the quality tags.

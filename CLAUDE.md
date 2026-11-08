@@ -79,6 +79,8 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
 - Compose keys: an `onKeyEvent` must come before `focusable()` in the modifier chain, or it never
   receives the keys. A lazy item off screen cannot take focus: `scrollToItem` first.
 - Commit only when asked. Never push without asking.
+- Commit messages and PR descriptions never mention Claude or Claude Code: no `Co-Authored-By` trailer,
+  no "Generated with" line (owner, 2026-11-08).
 
 ## Lessons carried over from VesperTV (reference only, no code copied)
 - Audio: FFmpeg decoder with `EXTENSION_RENDERER_MODE_ON` (PREFER software-decodes plain AAC).

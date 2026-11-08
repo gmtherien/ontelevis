@@ -83,6 +83,7 @@ data class GroupRow(
     val playlistId: Long,
     val name: String,
     val channelCount: Int,
+    val hidden: Boolean,
 )
 
 @Dao
@@ -186,13 +187,26 @@ interface ChannelGroupDao {
     @Query(
         """
         SELECT g.playlistId AS playlistId, g.name AS name,
-            (SELECT COUNT(*) FROM channel c WHERE c.playlistId = g.playlistId AND c.groupName = g.name) AS channelCount
+            (SELECT COUNT(*) FROM channel c WHERE c.playlistId = g.playlistId AND c.groupName = g.name) AS channelCount,
+            COALESCE(gp.hidden, 0) AS hidden
         FROM channel_group g JOIN playlist p ON p.id = g.playlistId
-        WHERE p.enabled = 1 AND g.hidden = 0
-        ORDER BY g.playlistId, g.sortOrder
+        LEFT JOIN group_pref gp ON gp.playlistId = g.playlistId AND gp.name = g.name
+        WHERE p.enabled = 1
+        ORDER BY g.playlistId, gp.position IS NULL, gp.position, g.sortOrder
         """,
     )
-    fun observeVisible(): Flow<List<GroupRow>>
+    fun observeAll(): Flow<List<GroupRow>>
+
+    /** Category names of one playlist in the order shown (the user's, then the provider's). */
+    @Query(
+        """
+        SELECT g.name FROM channel_group g
+        LEFT JOIN group_pref gp ON gp.playlistId = g.playlistId AND gp.name = g.name
+        WHERE g.playlistId = :playlistId
+        ORDER BY gp.position IS NULL, gp.position, g.sortOrder
+        """,
+    )
+    suspend fun orderedNames(playlistId: Long): List<String>
 }
 
 @Database(
@@ -206,10 +220,13 @@ interface ChannelGroupDao {
         SeriesEntity::class,
         EpisodeEntity::class,
         WatchProgressEntity::class,
+        FavoriteEntity::class,
+        HistoryEntity::class,
+        GroupPrefEntity::class,
     ],
-    version = 3,
+    version = 4,
     // From version 3 on, schema changes keep the user's data (no more wipe).
-    autoMigrations = [AutoMigration(from = 2, to = 3)],
+    autoMigrations = [AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
     exportSchema = true,
 )
 abstract class OntelevisDatabase : RoomDatabase() {
@@ -222,4 +239,6 @@ abstract class OntelevisDatabase : RoomDatabase() {
     abstract fun programmeDao(): ProgrammeDao
 
     abstract fun vodDao(): VodDao
+
+    abstract fun libraryDao(): LibraryDao
 }

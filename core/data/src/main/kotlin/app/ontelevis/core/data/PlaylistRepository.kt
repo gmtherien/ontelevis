@@ -1,5 +1,6 @@
 package app.ontelevis.core.data
 
+import app.ontelevis.core.data.db.LibraryDao
 import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.PlaylistEntity
 import app.ontelevis.core.data.importer.EpgImporter
@@ -47,6 +48,7 @@ internal class RoomPlaylistRepository
         private val importer: PlaylistImporter,
         private val epgImporter: EpgImporter,
         private val vodImporter: VodImporter,
+        private val libraryDao: LibraryDao,
     ) : PlaylistRepository {
         override fun observePlaylists(): Flow<List<Playlist>> =
             dao.observeAll().map { rows ->
@@ -58,7 +60,12 @@ internal class RoomPlaylistRepository
             source: PlaylistSource,
         ): Long = dao.insert(source.toEntity(name.trim()))
 
-        override suspend fun remove(id: Long) = dao.delete(id)
+        override suspend fun remove(id: Long) {
+            dao.delete(id)
+            // Favourites and history point at channel ids, which start with the playlist id.
+            libraryDao.deleteFavoritesWithPrefix("$id::")
+            libraryDao.deleteHistoryWithPrefix("$id::")
+        }
 
         override suspend fun refresh(id: Long): RefreshError? {
             val playlist = dao.get(id) ?: return null

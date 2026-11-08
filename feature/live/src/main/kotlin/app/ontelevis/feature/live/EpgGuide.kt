@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,6 +52,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.ChannelLogoTile
 import app.ontelevis.core.designsystem.component.EpgProgramBlock
@@ -78,6 +81,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import app.ontelevis.core.designsystem.R as DesignR
 
 /** What the guide reports back to the screen. */
 internal class GuideActions(
@@ -85,6 +89,8 @@ internal class GuideActions(
     val open: (Channel) -> Unit,
     /** Left from the first block of a row: back to the categories. */
     val leftEdge: () -> Unit,
+    /** Hold OK on a block: the channel's menu (favourites). */
+    val menu: (Channel) -> Unit,
 )
 
 /** Width of 30 minutes in the guide. The timeline is wider than the screen and scrolls. */
@@ -135,6 +141,7 @@ internal fun EpgGuide(
     window: EpgWindow,
     now: Instant,
     playingId: String?,
+    favoriteIds: Set<String>,
     groupName: String,
     listState: LazyListState,
     entry: FocusRequester,
@@ -179,6 +186,7 @@ internal fun EpgGuide(
                         window = window,
                         now = now,
                         playing = channel.id == playingId,
+                        favorite = channel.id in favoriteIds,
                         groupName = groupName,
                         times = times,
                         timeline = timeline,
@@ -286,6 +294,7 @@ private fun GuideRow(
     window: EpgWindow,
     now: Instant,
     playing: Boolean,
+    favorite: Boolean,
     groupName: String,
     times: DateTimeFormatter,
     timeline: Timeline,
@@ -323,13 +332,24 @@ private fun GuideRow(
             )
             ChannelLogoTile(parsed.initials, logoUrl = channel.logoUrl)
             Column(Modifier.weight(1f)) {
-                Text(
-                    parsed.title,
-                    style = OntTheme.type.itemStrong,
-                    color = c.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        parsed.title,
+                        style = OntTheme.type.itemStrong,
+                        color = c.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (favorite) {
+                        Icon(
+                            painterResource(DesignR.drawable.ont_ic_star),
+                            contentDescription = stringResource(R.string.live_favorite),
+                            tint = c.accent,
+                            modifier = Modifier.padding(start = 4.dp).size(12.dp),
+                        )
+                    }
+                }
                 if (meta.isNotEmpty()) {
                     Text(
                         meta,
@@ -366,6 +386,7 @@ private fun GuideRow(
                     previous = null,
                     next = null,
                     onClick = { actions.open(channel) },
+                    onLongClick = { actions.menu(channel) },
                     actions = actions,
                 )
             } else {
@@ -407,6 +428,7 @@ private fun GuideRow(
                             previous = blockFocus.getOrNull(index - 1),
                             next = blockFocus.getOrNull(index + 1),
                             onClick = { actions.open(channel) },
+                            onLongClick = { actions.menu(channel) },
                             actions = actions,
                         )
                     }
@@ -443,6 +465,7 @@ private fun Block(
     previous: FocusRequester?,
     next: FocusRequester?,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     actions: GuideActions,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -497,6 +520,7 @@ private fun Block(
         subtitle = subtitle,
         state = state,
         onClick = onClick,
+        onLongClick = onLongClick,
         playing = playing,
         progress = progress,
         modifier =

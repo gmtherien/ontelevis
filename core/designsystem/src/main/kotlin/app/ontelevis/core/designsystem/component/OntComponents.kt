@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -158,6 +159,10 @@ fun OntListItem(
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable (tint: Color) -> Unit)? = null,
     trailingTag: String? = null,
+    /** Hold OK (remote) or long press (touch): usually opens a menu. */
+    onLongClick: (() -> Unit)? = null,
+    /** Shown faded (e.g. a hidden category while hidden ones are listed). */
+    dimmed: Boolean = false,
 ) {
     val c = OntTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -165,8 +170,13 @@ fun OntListItem(
 
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         interactionSource = interaction,
-        modifier = modifier.fillMaxWidth().height(OntDimens.ListItemHeight),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(OntDimens.ListItemHeight)
+                .alpha(if (dimmed && !focused) 0.5f else 1f),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusItem)),
         colors =
             ClickableSurfaceDefaults.colors(
@@ -293,6 +303,7 @@ fun EpgProgramBlock(
     modifier: Modifier = Modifier,
     playing: Boolean = false,
     progress: Float = 0f,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val c = OntTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -307,6 +318,7 @@ fun EpgProgramBlock(
 
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         interactionSource = interaction,
         modifier = modifier.fillMaxHeight(),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(OntDimens.RadiusBlock)),

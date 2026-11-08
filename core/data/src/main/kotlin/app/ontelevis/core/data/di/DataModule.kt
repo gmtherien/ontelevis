@@ -12,6 +12,7 @@ import app.ontelevis.core.data.RoomVodRepository
 import app.ontelevis.core.data.VodRepository
 import app.ontelevis.core.data.db.ChannelDao
 import app.ontelevis.core.data.db.ChannelGroupDao
+import app.ontelevis.core.data.db.LibraryDao
 import app.ontelevis.core.data.db.OntelevisDatabase
 import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.ProgrammeDao
@@ -55,6 +56,9 @@ internal object DatabaseModule {
 
     @Provides
     fun vodDao(database: OntelevisDatabase): VodDao = database.vodDao()
+
+    @Provides
+    fun libraryDao(database: OntelevisDatabase): LibraryDao = database.libraryDao()
 }
 
 @Module
