@@ -76,6 +76,8 @@ fun TvApp() {
     val updating = stringResource(R.string.content_update_started)
     val railEntry = remember { FocusRequester() }
     var railFocused by remember { mutableStateOf(false) }
+    // Guide mode on the TV screen: the guide has the focus and takes the whole width (rail hidden).
+    var liveGuideMode by remember { mutableStateOf(false) }
     // Back climbs one level before leaving: from a destination's content up to the rail.
     BackHandler(enabled = !railFocused && destination?.isRailTop() == true) { runCatching { railEntry.requestFocus() } }
 
@@ -117,7 +119,8 @@ fun TvApp() {
         selectedKey = selected,
         entryRequester = railEntry,
         onRailFocusChanged = { railFocused = it },
-        railVisible = destination?.isPlayer() != true,
+        railVisible =
+            destination?.isPlayer() != true && !(liveGuideMode && destination?.hasRoute(LiveRoute::class) == true),
         onSelect = { item ->
             val key = item.key as RailKey
             if (key == RailKey.UPDATE) {
@@ -143,6 +146,7 @@ fun TvApp() {
                 LiveScreen(
                     onAddPlaylist = { navController.navigate(AddPlaylistRoute) },
                     onOpenFullscreen = { navController.navigate(PlayerRoute) },
+                    onGuideModeChange = { liveGuideMode = it },
                 )
             }
             composable<PlayerRoute> { PlayerScreen() }

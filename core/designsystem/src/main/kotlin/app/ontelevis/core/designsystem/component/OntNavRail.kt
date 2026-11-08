@@ -80,10 +80,16 @@ fun OntNavRailScaffold(
         label = "rail-width",
     )
     val selectedRequester = entryRequester
+    // The content slides over the rail's place when the rail goes away (guide mode), instead of jumping.
+    val contentStart by animateDpAsState(
+        targetValue = if (railVisible) OntDimens.NavRailWidth else 0.dp,
+        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
+        label = "rail-content-start",
+    )
 
     Box(modifier.fillMaxSize().background(c.background)) {
         Box(
-            Modifier.fillMaxSize().padding(start = if (railVisible) OntDimens.NavRailWidth else 0.dp),
+            Modifier.fillMaxSize().padding(start = contentStart),
             content = content,
         )
         if (!railVisible) return@Box

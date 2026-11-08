@@ -44,6 +44,7 @@ import app.ontelevis.core.designsystem.component.LiveBadge
 import app.ontelevis.core.designsystem.component.OntTag
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntTheme
+import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.Programme
 import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.LiveState
@@ -64,9 +65,13 @@ internal fun NowPlaying(
     onFullscreen: () -> Unit,
     /** Left from the preview: back to the selected category (not the one beside it on screen). */
     onLeft: () -> Unit,
+    /** Programme focused in the guide: the info panel describes it instead of the channel in the player. */
+    guideFocus: GuideFocus? = null,
 ) {
     val current = onNow(programmes, now)
     val next = programmes.firstOrNull { it.startMillis >= (current?.stopMillis ?: now.toEpochMilli()) }
+    val times = rememberTimeFormatter()
+    val zone = ZoneId.systemDefault()
     Row(Modifier.fillMaxWidth().height(OntDimens.NowPlayingHeight)) {
         Preview(
             live,
@@ -87,7 +92,36 @@ internal fun NowPlaying(
                 },
         )
         Spacer(Modifier.width(24.dp))
-        InfoPanel(live, current, next, Modifier.weight(1f).fillMaxHeight())
+        val infoModifier = Modifier.weight(1f).fillMaxHeight()
+        if (guideFocus != null) {
+            val programme = guideFocus.programme
+            InfoPanel(
+                channel = guideFocus.channel,
+                videoHeight = if (guideFocus.channel.id == live.channel?.id) live.videoHeight else 0,
+                programme = programme,
+                bottomLine =
+                    programme?.let {
+                        val start = Instant.ofEpochMilli(it.startMillis).atZone(zone)
+                        val end = Instant.ofEpochMilli(it.stopMillis).atZone(zone)
+                        "${start.format(times)} – ${end.format(times)}"
+                    },
+                modifier = infoModifier,
+            )
+        } else {
+            live.channel?.let { channel ->
+                InfoPanel(
+                    channel = channel,
+                    videoHeight = live.videoHeight,
+                    programme = current,
+                    bottomLine =
+                        next?.let {
+                            val at = Instant.ofEpochMilli(it.startMillis).atZone(zone).format(times)
+                            "${stringResource(R.string.live_next)} · $at  ${it.title}"
+                        },
+                    modifier = infoModifier,
+                )
+            }
+        }
     }
 }
 
@@ -163,16 +197,17 @@ private fun Preview(
 
 @Composable
 private fun InfoPanel(
-    live: LiveState,
-    current: Programme?,
-    next: Programme?,
+    channel: Channel,
+    /** Decoded height of the channel in the player, 0 for any other channel. */
+    videoHeight: Int,
+    programme: Programme?,
+    /** Under the description: what is next (channel in the player) or the programme's times (guide). */
+    bottomLine: String?,
     modifier: Modifier,
 ) {
     val c = OntTheme.colors
-    val channel = live.channel ?: return
+    val current = programme
     val parsed = remember(channel.name) { parseChannelName(channel.name) }
-    val times = rememberTimeFormatter()
-    val zone = ZoneId.systemDefault()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChannelLogoTile(parsed.initials, size = OntDimens.InfoLogoTile, logoUrl = channel.logoUrl)
@@ -189,7 +224,7 @@ private fun InfoPanel(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            qualityLabel(channel, live.videoHeight)?.let { OntTag(it) }
+            qualityLabel(channel, videoHeight)?.let { OntTag(it) }
             if (current == null) OntTag("24/7")
             channel.group.ifEmpty { null }?.let { OntTag(it) }
         }
@@ -211,13 +246,12 @@ private fun InfoPanel(
             },
             style = OntTheme.type.body,
             color = c.textMuted,
-            maxLines = if (next != null) 3 else 4,
+            maxLines = if (bottomLine != null) 3 else 4,
             overflow = TextOverflow.Ellipsis,
         )
-        if (next != null) {
-            val at = Instant.ofEpochMilli(next.startMillis).atZone(zone).format(times)
+        if (bottomLine != null) {
             Text(
-                "${stringResource(R.string.live_next)} · $at  ${next.title}",
+                bottomLine,
                 style = OntTheme.type.meta,
                 color = c.textTertiary,
                 maxLines = 1,
@@ -226,3 +260,9 @@ private fun InfoPanel(
         }
     }
 }
+
+/** A programme focused in the guide (null programme: the channel has no guide). */
+internal class GuideFocus(
+    val channel: Channel,
+    val programme: Programme?,
+)

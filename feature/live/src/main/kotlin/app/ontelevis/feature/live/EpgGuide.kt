@@ -91,6 +91,8 @@ internal class GuideActions(
     val leftEdge: () -> Unit,
     /** Hold OK on a block: the channel's menu (favourites). */
     val menu: (Channel) -> Unit,
+    /** A block took the focus: its channel and programme (null: no guide for that channel). */
+    val focused: (Channel, Programme?) -> Unit,
 )
 
 /** Width of 30 minutes in the guide. The timeline is wider than the screen and scrolls. */
@@ -387,6 +389,7 @@ private fun GuideRow(
                     next = null,
                     onClick = { actions.open(channel) },
                     onLongClick = { actions.menu(channel) },
+                    onFocused = { actions.focused(channel, null) },
                     actions = actions,
                 )
             } else {
@@ -429,6 +432,7 @@ private fun GuideRow(
                             next = blockFocus.getOrNull(index + 1),
                             onClick = { actions.open(channel) },
                             onLongClick = { actions.menu(channel) },
+                            onFocused = { actions.focused(channel, programme) },
                             actions = actions,
                         )
                     }
@@ -466,6 +470,7 @@ private fun Block(
     next: FocusRequester?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onFocused: () -> Unit,
     actions: GuideActions,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -532,7 +537,10 @@ private fun Block(
                 .onFocusChanged {
                     focused = it.isFocused
                     // Bring the whole programme (as laid out in time) into view.
-                    if (it.isFocused) timeline.ensureVisible(start, end)
+                    if (it.isFocused) {
+                        timeline.ensureVisible(start, end)
+                        onFocused()
+                    }
                 }.then(focusTargets.fold(Modifier as Modifier) { m, r -> m.focusRequester(r) })
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false

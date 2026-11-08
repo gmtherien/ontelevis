@@ -2,6 +2,8 @@ package app.ontelevis.feature.live
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,11 +47,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -119,6 +125,8 @@ fun LiveScreen(
     onAddPlaylist: () -> Unit,
     onOpenFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
+    /** True while the guide has the focus: the shell hides its rail so the guide gets the width. */
+    onGuideModeChange: (Boolean) -> Unit = {},
     viewModel: LiveViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -150,6 +158,7 @@ fun LiveScreen(
             live,
             viewModel.player,
             actions,
+            onGuideModeChange,
             modifier,
         )
     } else {
@@ -238,6 +247,7 @@ private fun TvLive(
     live: LiveState,
     player: Player?,
     actions: LiveActions,
+    onGuideModeChange: (Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val c = OntTheme.colors
@@ -262,6 +272,19 @@ private fun TvLive(
     var groupMenu by remember { mutableStateOf<ChannelGroup?>(null) }
     // Category being moved with Up / Down (hold OK > Move).
     var moving by remember { mutableStateOf<ChannelGroup?>(null) }
+    // Guide mode (as in TiviMate): while the guide has the focus, the rail and the categories slide away
+    // and the guide uses the whole width. A channel menu opened from the guide keeps the mode.
+    var guideFocused by remember { mutableStateOf(false) }
+    var guideFocus by remember { mutableStateOf<GuideFocus?>(null) }
+    val guideMode = guideFocused || channelMenu != null
+    val latestOnGuideMode by rememberUpdatedState(onGuideModeChange)
+    LaunchedEffect(guideMode) { latestOnGuideMode(guideMode) }
+    DisposableEffect(Unit) { onDispose { latestOnGuideMode(false) } }
+    val panelWidth by animateDpAsState(
+        targetValue = if (guideMode) 0.dp else OntDimens.CategoryPanelWidth,
+        animationSpec = tween(OntMotion.FOCUS_ANIM_MS),
+        label = "categories-width",
+    )
     val entries = remember(state) { panelEntries(state) }
     val latestState by rememberUpdatedState(state)
     val latestEntries by rememberUpdatedState(entries)
@@ -343,6 +366,8 @@ private fun TvLive(
         if (movingKey != null) focusPanel(movingKey)
     }
     BackHandler(enabled = moving != null) { moving = null }
+    // Back from the guide: the categories come back (instead of jumping to the hidden rail).
+    BackHandler(enabled = guideMode && moving == null) { scope.launch { focusCategory() } }
 
     val guideActions =
         GuideActions(
@@ -357,34 +382,43 @@ private fun TvLive(
             },
             leftEdge = { scope.launch { focusCategory() } },
             menu = { channelMenu = it },
+            focused = { channel, programme -> guideFocus = GuideFocus(channel, programme) },
         )
 
     Row(modifier.fillMaxSize().background(c.background)) {
-        CategoryPanel(
-            title = title,
-            entries = entries,
-            selected = state.selectedGroup,
-            moving = moving,
-            onSelect = { group ->
-                actions.select(group)
-                guideFocusPending = true
-            },
-            onMenu = { groupMenu = it },
-            onMove = { step -> moving?.let { actions.moveGroup(it, step) } },
-            onEndMove = {
-                val done = moving
-                moving = null
-                scope.launch { focusPanel(done?.entryKey) }
-            },
-            onToggleHidden = actions.toggleShowHidden,
-            // Right from a category: the channel in the player when its row is on screen (§6), else the
-            // current programme of the first visible row.
-            rightTarget = (if (playingRowVisible) playingRowFocus else guideEntry).takeIf { channels.isNotEmpty() },
-            focusKey = panelFocusKey ?: state.selectedGroup?.entryKey,
-            focusRequester = panelFocus,
-            listState = categoryList,
-            modifier = Modifier.width(OntDimens.CategoryPanelWidth).fillMaxHeight(),
-        )
+        // The panel keeps its width and slides out to the left (its rows stay laid out, so focus can
+        // come back to them at once).
+        Box(Modifier.width(panelWidth).fillMaxHeight().clipToBounds()) {
+            CategoryPanel(
+                title = title,
+                entries = entries,
+                selected = state.selectedGroup,
+                moving = moving,
+                onSelect = { group ->
+                    actions.select(group)
+                    guideFocusPending = true
+                },
+                onMenu = { groupMenu = it },
+                onMove = { step -> moving?.let { actions.moveGroup(it, step) } },
+                onEndMove = {
+                    val done = moving
+                    moving = null
+                    scope.launch { focusPanel(done?.entryKey) }
+                },
+                onToggleHidden = actions.toggleShowHidden,
+                // Right from a category: the channel in the player when its row is on screen (§6), else the
+                // current programme of the first visible row.
+                rightTarget = (if (playingRowVisible) playingRowFocus else guideEntry).takeIf { channels.isNotEmpty() },
+                focusKey = panelFocusKey ?: state.selectedGroup?.entryKey,
+                focusRequester = panelFocus,
+                listState = categoryList,
+                modifier =
+                    Modifier
+                        .wrapContentWidth(Alignment.End, unbounded = true)
+                        .width(OntDimens.CategoryPanelWidth)
+                        .fillMaxHeight(),
+            )
+        }
         Column(
             modifier =
                 Modifier
@@ -422,6 +456,7 @@ private fun TvLive(
                         now = guide.now,
                         previewFocus = previewFocus,
                         onLeft = { scope.launch { focusCategory() } },
+                        guideFocus = guideFocus.takeIf { guideMode },
                         onFullscreen = {
                             if (live.channel != null) {
                                 returnFocus = ReturnFocus.PREVIEW
@@ -455,6 +490,11 @@ private fun TvLive(
                             entry = guideEntry,
                             playingRowFocus = playingRowFocus,
                             actions = guideActions,
+                            modifier =
+                                Modifier.onFocusChanged {
+                                    guideFocused = it.hasFocus
+                                    if (!it.hasFocus && channelMenu == null) guideFocus = null
+                                },
                         )
                     }
                 }
