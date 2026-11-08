@@ -30,6 +30,15 @@ data class HistoryEntity(
     val watchedAt: Long,
 )
 
+/** A favourite movie or series, by app id (`playlistId::m:raw` / `playlistId::s:raw`). */
+@Entity(tableName = "vod_favorite")
+data class VodFavoriteEntity(
+    @PrimaryKey val contentId: String,
+    /** `movie` or `series`. */
+    val kind: String,
+    val position: Long,
+)
+
 /** The user's order and visibility of one provider category. */
 @Entity(
     tableName = "group_pref",
@@ -107,6 +116,51 @@ interface LibraryDao {
 
     @Query("DELETE FROM channel_history WHERE channelId LIKE :prefix || '%'")
     suspend fun deleteHistoryWithPrefix(prefix: String)
+
+    // Movie and series favourites
+
+    @Query(
+        """
+        SELECT m.* FROM vod_favorite f
+        JOIN movie m ON m.id = f.contentId
+        JOIN playlist p ON p.id = m.playlistId
+        WHERE p.enabled = 1
+        ORDER BY f.position
+        """,
+    )
+    fun observeFavoriteMovies(): Flow<List<MovieEntity>>
+
+    @Query(
+        """
+        SELECT s.* FROM vod_favorite f
+        JOIN series s ON s.id = f.contentId
+        JOIN playlist p ON p.id = s.playlistId
+        WHERE p.enabled = 1
+        ORDER BY f.position
+        """,
+    )
+    fun observeFavoriteSeries(): Flow<List<SeriesEntity>>
+
+    @Query("SELECT contentId FROM vod_favorite")
+    fun observeVodFavoriteIds(): Flow<List<String>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM vod_favorite WHERE contentId = :contentId)")
+    suspend fun isVodFavorite(contentId: String): Boolean
+
+    @Query(
+        "INSERT OR IGNORE INTO vod_favorite (contentId, kind, position) " +
+            "SELECT :contentId, :kind, COALESCE(MAX(position), 0) + 1 FROM vod_favorite",
+    )
+    suspend fun addVodFavorite(
+        contentId: String,
+        kind: String,
+    )
+
+    @Query("DELETE FROM vod_favorite WHERE contentId = :contentId")
+    suspend fun removeVodFavorite(contentId: String)
+
+    @Query("DELETE FROM vod_favorite WHERE contentId LIKE :prefix || '%'")
+    suspend fun deleteVodFavoritesWithPrefix(prefix: String)
 
     // Categories
 

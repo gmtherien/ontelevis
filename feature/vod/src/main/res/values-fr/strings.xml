@@ -25,6 +25,12 @@
     <string name="vod_error_unsupported">Ce format de fichier ne peut pas être lu.</string>
     <string name="vod_error_unreachable">Le fichier ne se charge pas. Revenez en arrière et réessayez.</string>
     <string name="vod_error_device">Cet appareil ne peut pas décoder cette vidéo (format trop exigeant, ex. 4K ou Dolby Vision). Essayez une autre version du titre.</string>
+    <string name="vod_favorites">Favoris</string>
+    <string name="vod_favorites_empty">Aucun favori pour l\'instant. Maintenez OK sur une affiche pour l\'ajouter.</string>
+    <string name="vod_menu_add_favorite">Ajouter aux favoris</string>
+    <string name="vod_menu_remove_favorite">Retirer des favoris</string>
+    <string name="vod_favorite_added">Ajouté aux favoris</string>
+    <string name="vod_favorite_removed">Retiré des favoris</string>
     <plurals name="vod_count">
         <item quantity="one">%d titre</item>
         <item quantity="many">%d titres</item>

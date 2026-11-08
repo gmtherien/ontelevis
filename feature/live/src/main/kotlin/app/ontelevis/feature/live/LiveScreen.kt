@@ -421,6 +421,7 @@ private fun TvLive(
                         programmes = guide.playing,
                         now = guide.now,
                         previewFocus = previewFocus,
+                        onLeft = { scope.launch { focusCategory() } },
                         onFullscreen = {
                             if (live.channel != null) {
                                 returnFocus = ReturnFocus.PREVIEW

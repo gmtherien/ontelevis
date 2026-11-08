@@ -15,13 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,8 +32,10 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import app.ontelevis.core.designsystem.R
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntMotion
 import app.ontelevis.core.designsystem.theme.OntTheme
@@ -85,12 +90,17 @@ fun OntPosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     progress: Float? = null,
+    /** Hold OK (remote) or long press (touch): usually opens a menu. */
+    onLongClick: (() -> Unit)? = null,
+    /** Shows an amber star in the corner. */
+    favorite: Boolean = false,
 ) {
     val c = OntTheme.colors
     val shape = RoundedCornerShape(OntDimens.RadiusButton)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Surface(
             onClick = onClick,
+            onLongClick = onLongClick,
             modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
             shape = ClickableSurfaceDefaults.shape(shape),
             colors = ClickableSurfaceDefaults.colors(containerColor = c.surface2, focusedContainerColor = c.surface2),
@@ -104,6 +114,23 @@ fun OntPosterCard(
             Box(Modifier.fillMaxSize()) {
                 OntImage(imageUrl, Modifier.fillMaxSize(), fallback = title)
                 if (progress != null && progress > 0f) ProgressBar(progress, Modifier.align(Alignment.BottomStart))
+                if (favorite) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(22.dp)
+                            .background(c.background.copy(alpha = 0.75f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ont_ic_star),
+                            contentDescription = null,
+                            tint = c.accent,
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                }
             }
         }
         Text(

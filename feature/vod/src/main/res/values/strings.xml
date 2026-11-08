@@ -25,6 +25,12 @@
     <string name="vod_error_unsupported">This file format cannot be played.</string>
     <string name="vod_error_unreachable">The file does not load. Go back and try again.</string>
     <string name="vod_error_device">This device cannot decode this video (format too demanding, e.g. 4K or Dolby Vision). Try another version of the title.</string>
+    <string name="vod_favorites">Favourites</string>
+    <string name="vod_favorites_empty">No favourites yet. Hold OK on a poster to add it.</string>
+    <string name="vod_menu_add_favorite">Add to favourites</string>
+    <string name="vod_menu_remove_favorite">Remove from favourites</string>
+    <string name="vod_favorite_added">Added to favourites</string>
+    <string name="vod_favorite_removed">Removed from favourites</string>
     <plurals name="vod_count">
         <item quantity="one">%d title</item>
         <item quantity="other">%d titles</item>

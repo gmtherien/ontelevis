@@ -55,8 +55,12 @@ data class VodItems(
 data class VodBrowseState(
     /** Null while loading. */
     val playlists: List<Playlist>? = null,
+    /** Favourites first, then the provider categories. */
     val categories: List<VodCategory> = emptyList(),
+    /** The playlists have movie / series categories (Favourites alone does not count). */
+    val hasProviderCategories: Boolean = false,
     val selected: VodCategory? = null,
+    val favoriteIds: Set<String> = emptySet(),
 )
 
 /** Movies or series grid with its categories. The kind is set by the screen ([setKind]). */
@@ -74,9 +78,36 @@ class VodBrowseViewModel
         private val categories: Flow<List<VodCategory>> =
             kind.flatMapLatest { k -> if (k == null) flowOf(emptyList()) else vod.observeCategories(k) }
 
+        private val favoriteMovies = vod.observeFavoriteMovies()
+        private val favoriteSeries = vod.observeFavoriteSeries()
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val favoritesCategory: Flow<VodCategory?> =
+            kind.flatMapLatest { k ->
+                when (k) {
+                    null -> flowOf(null)
+                    VodKind.MOVIE -> favoriteMovies.map { VodCategory.favorites(k, it.size) }
+                    VodKind.SERIES -> favoriteSeries.map { VodCategory.favorites(k, it.size) }
+                }
+            }
+
         val state: StateFlow<VodBrowseState> =
-            combine(playlists.observePlaylists(), categories, selectedKey) { lists, cats, key ->
-                VodBrowseState(lists, cats, cats.firstOrNull { it.key == key } ?: cats.firstOrNull())
+            combine(
+                playlists.observePlaylists(),
+                categories,
+                favoritesCategory,
+                selectedKey,
+                vod.observeFavoriteIds(),
+            ) { lists, cats, favorites, key, favoriteIds ->
+                val all = if (cats.isEmpty() || favorites == null) cats else listOf(favorites) + cats
+                VodBrowseState(
+                    playlists = lists,
+                    categories = all,
+                    hasProviderCategories = cats.isNotEmpty(),
+                    // Opens on the first provider category, not on Favourites.
+                    selected = all.firstOrNull { it.key == key } ?: cats.firstOrNull(),
+                    favoriteIds = favoriteIds,
+                )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodBrowseState())
 
         @OptIn(ExperimentalCoroutinesApi::class)
@@ -85,10 +116,11 @@ class VodBrowseViewModel
                 .map { it.selected }
                 .distinctUntilChangedBy { it?.key to it?.kind }
                 .flatMapLatest { category ->
-                    when (category?.kind) {
-                        null -> flowOf(emptyList())
-                        VodKind.MOVIE -> moviesWithProgress(category)
-                        VodKind.SERIES -> vod.observeSeries(category).map { list -> list.map { it.toItem() } }
+                    when {
+                        category == null -> flowOf(emptyList())
+                        category.kind == VodKind.MOVIE -> moviesWithProgress(category)
+                        category.isFavorites -> favoriteSeries.map { list -> list.map { it.toItem() } }
+                        else -> vod.observeSeries(category).map { list -> list.map { it.toItem() } }
                     }.map { VodItems(category?.key, it) }
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VodItems())
 
@@ -103,9 +135,12 @@ class VodBrowseViewModel
             selectedKey.value = category.key
         }
 
+        /** Returns true when the title is now a favourite. */
+        suspend fun toggleFavorite(id: String): Boolean = vod.toggleFavorite(id, kind.value ?: VodKind.MOVIE)
+
         @OptIn(ExperimentalCoroutinesApi::class)
         private fun moviesWithProgress(category: VodCategory): Flow<List<VodItem>> =
-            vod.observeMovies(category).flatMapLatest { movies ->
+            (if (category.isFavorites) favoriteMovies else vod.observeMovies(category)).flatMapLatest { movies ->
                 vod.observeProgress(movies.map { it.id }).map { progress ->
                     movies.map { it.toItem(progress[it.id]) }
                 }

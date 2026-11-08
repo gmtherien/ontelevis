@@ -112,7 +112,19 @@ data class VodCategory(
     /** Provider category name; empty for titles without a category. */
     val name: String,
     val count: Int,
-)
+) {
+    /** The user's favourite movies or series rather than a provider category. */
+    val isFavorites: Boolean get() = playlistId == FAVORITES_ID
+
+    companion object {
+        private const val FAVORITES_ID = -1L
+
+        fun favorites(
+            kind: VodKind,
+            count: Int,
+        ) = VodCategory(FAVORITES_ID, kind, "", count)
+    }
+}
 
 data class Movie(
     /** `playlistId::rawId`. */

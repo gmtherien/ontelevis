@@ -65,6 +65,7 @@ internal class RoomPlaylistRepository
             // Favourites and history point at channel ids, which start with the playlist id.
             libraryDao.deleteFavoritesWithPrefix("$id::")
             libraryDao.deleteHistoryWithPrefix("$id::")
+            libraryDao.deleteVodFavoritesWithPrefix("$id::")
         }
 
         override suspend fun refresh(id: Long): RefreshError? {

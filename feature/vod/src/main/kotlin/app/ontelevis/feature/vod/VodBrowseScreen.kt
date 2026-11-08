@@ -1,5 +1,6 @@
 package app.ontelevis.feature.vod
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -18,15 +20,18 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,15 +40,25 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.component.LocalIsTv
 import app.ontelevis.core.designsystem.component.OntListItem
+import app.ontelevis.core.designsystem.component.OntMenu
+import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntPosterCard
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.SectionLabel
@@ -52,7 +67,11 @@ import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.VodCategory
 import app.ontelevis.core.model.VodKind
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
+import app.ontelevis.core.designsystem.R as DesignR
 
 /**
  * Movies or series: categories on the left (provider order, names as written), posters on the
@@ -76,6 +95,11 @@ fun VodBrowseScreen(
     val gridEntry = remember { FocusRequester() }
     val categoryList = rememberLazyListState()
     val gridState = rememberSaveable(state.selected?.key, saver = LazyGridState.Saver) { LazyGridState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var menuItem by remember { mutableStateOf<VodItem?>(null) }
+    val latestItems by rememberUpdatedState(itemsState)
+
     // Category whose posters should take the focus once they are on screen (OK on a category).
     var gridFocusFor by remember { mutableStateOf<Pair<Long, String>?>(null) }
     val latestState by rememberUpdatedState(state)
@@ -94,7 +118,9 @@ fun VodBrowseScreen(
     val restoreId = remember { viewModel.lastOpenedId }
 
     // Initial focus: back from a poster's page, that poster; otherwise the selected category.
-    val hasCategories = state.categories.isNotEmpty()
+    val hasCategories = state.hasProviderCategories
+    val favoritesEmpty =
+        state.selected?.isFavorites == true && items.isEmpty() && itemsState.categoryKey == state.selected?.key
     LaunchedEffect(hasCategories) {
         if (hasCategories && tv) {
             delay(100)
@@ -145,18 +171,39 @@ fun VodBrowseScreen(
                     modifier = Modifier.padding(start = 10.dp),
                 )
                 Spacer(Modifier.height(24.dp))
-                if (hasCategories) {
-                    SectionLabel(stringResource(R.string.vod_categories), Modifier.padding(start = 10.dp))
-                    Spacer(Modifier.height(8.dp))
-                }
                 LazyColumn(
                     state = categoryList,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = OntDimens.SafeVertical),
                 ) {
-                    items(state.categories, key = { "${it.playlistId}/${it.name}" }) { category ->
+                    itemsIndexed(state.categories, key = {
+                        _,
+                        it,
+                        ->
+                        "${it.playlistId}/${it.name}"
+                    }) { index, category ->
                         val selected = category.key == state.selected?.key
+                        // The "Categories" label sits above the first provider category (under Favourites).
+                        if (!category.isFavorites && state.categories.getOrNull(index - 1)?.isFavorites != false) {
+                            SectionLabel(
+                                stringResource(R.string.vod_categories),
+                                Modifier.padding(start = 10.dp, top = if (index > 0) 12.dp else 0.dp, bottom = 8.dp),
+                            )
+                        }
                         OntListItem(
+                            leadingIcon =
+                                if (category.isFavorites) {
+                                    { tint ->
+                                        Icon(
+                                            painterResource(DesignR.drawable.ont_ic_star),
+                                            contentDescription = null,
+                                            tint = tint,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
                             text = categoryLabel(category),
                             selected = selected,
                             onClick = {
@@ -217,6 +264,10 @@ fun VodBrowseScreen(
                     )
                 }
 
+                favoritesEmpty -> {
+                    Message(stringResource(R.string.vod_favorites_empty))
+                }
+
                 else -> {
                     Text(
                         pluralStringResource(R.plurals.vod_count, items.size, items.size),
@@ -236,6 +287,8 @@ fun VodBrowseScreen(
                                 title = item.title,
                                 meta = itemMeta(item),
                                 progress = item.progress,
+                                favorite = item.id in state.favoriteIds,
+                                onLongClick = { menuItem = item },
                                 onClick = {
                                     viewModel.lastOpenedId = item.id
                                     onOpen(item.id)
@@ -259,9 +312,19 @@ fun VodBrowseScreen(
                                                 Modifier
                                             },
                                         )
-                                        // Left from the first column goes back to the categories.
-                                        .focusProperties {
-                                            left = FocusRequester.Default
+                                        // Left from the first column goes back to the selected category
+                                        // (plain focus search picks whichever category is beside the poster).
+                                        .onPreviewKeyEvent { event ->
+                                            val firstColumn =
+                                                gridState.layoutInfo.visibleItemsInfo
+                                                    .firstOrNull { it.index == index }
+                                                    ?.column == 0
+                                            if (tv && firstColumn && event.key == Key.DirectionLeft) {
+                                                if (event.type == KeyEventType.KeyDown) scope.launch { focusCategory() }
+                                                true
+                                            } else {
+                                                false
+                                            }
                                         },
                             )
                         }
@@ -270,12 +333,49 @@ fun VodBrowseScreen(
             }
         }
     }
+    menuItem?.let { item ->
+        val favorite = item.id in state.favoriteIds
+        val added = stringResource(R.string.vod_favorite_added)
+        val removed = stringResource(R.string.vod_favorite_removed)
+        OntMenu(
+            title = item.title,
+            options =
+                listOf(
+                    OntMenuOption(
+                        stringResource(
+                            if (favorite) R.string.vod_menu_remove_favorite else R.string.vod_menu_add_favorite,
+                        ),
+                    ) {
+                        scope.launch {
+                            val inFavorites = latestState.selected?.isFavorites == true
+                            val nowFavorite = viewModel.toggleFavorite(item.id)
+                            Toast.makeText(context, if (nowFavorite) added else removed, Toast.LENGTH_SHORT).show()
+                            if (inFavorites && !nowFavorite) {
+                                // Its poster just left the Favourites grid: focus the first one left, or the category.
+                                withTimeoutOrNull(1_000) {
+                                    snapshotFlow { latestItems.list }.first { list -> list.none { it.id == item.id } }
+                                }
+                                withFrameNanos { }
+                                if (latestItems.list.isEmpty() || runCatching { gridEntry.requestFocus() }.isFailure) {
+                                    focusCategory()
+                                }
+                            }
+                        }
+                    },
+                ),
+            onDismiss = { menuItem = null },
+        )
+    }
 }
 
 /** Raw provider names, like the live categories (emoji and prefixes kept). */
 @Composable
 private fun categoryLabel(category: VodCategory): String =
-    category.name.ifEmpty { stringResource(R.string.vod_uncategorized) }
+    if (category.isFavorites) {
+        stringResource(R.string.vod_favorites)
+    } else {
+        category.name.ifEmpty { stringResource(R.string.vod_uncategorized) }
+    }
 
 private fun itemMeta(item: VodItem): String? =
     listOfNotNull(

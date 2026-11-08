@@ -22,6 +22,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,6 +62,8 @@ internal fun NowPlaying(
     now: Instant,
     previewFocus: FocusRequester,
     onFullscreen: () -> Unit,
+    /** Left from the preview: back to the selected category (not the one beside it on screen). */
+    onLeft: () -> Unit,
 ) {
     val current = onNow(programmes, now)
     val next = programmes.firstOrNull { it.startMillis >= (current?.stopMillis ?: now.toEpochMilli()) }
@@ -67,7 +74,17 @@ internal fun NowPlaying(
             current,
             previewFocus,
             onFullscreen,
-            Modifier.width(OntDimens.PlayerWidth).fillMaxHeight(),
+            Modifier
+                .width(OntDimens.PlayerWidth)
+                .fillMaxHeight()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                        onLeft()
+                        true
+                    } else {
+                        false
+                    }
+                },
         )
         Spacer(Modifier.width(24.dp))
         InfoPanel(live, current, next, Modifier.weight(1f).fillMaxHeight())

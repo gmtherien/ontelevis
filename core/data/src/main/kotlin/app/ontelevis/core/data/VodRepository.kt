@@ -1,6 +1,7 @@
 package app.ontelevis.core.data
 
 import app.ontelevis.core.data.db.EpisodeEntity
+import app.ontelevis.core.data.db.LibraryDao
 import app.ontelevis.core.data.db.MovieEntity
 import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.SeriesEntity
@@ -27,6 +28,19 @@ interface VodRepository {
     fun observeCategories(kind: VodKind): Flow<List<VodCategory>>
 
     fun observeMovies(category: VodCategory): Flow<List<Movie>>
+
+    /** Favourite movies or series, in the order they were added. */
+    fun observeFavoriteMovies(): Flow<List<Movie>>
+
+    fun observeFavoriteSeries(): Flow<List<Series>>
+
+    fun observeFavoriteIds(): Flow<Set<String>>
+
+    /** Adds or removes a movie / series from the favourites; returns true when it is now a favourite. */
+    suspend fun toggleFavorite(
+        contentId: String,
+        kind: VodKind,
+    ): Boolean
 
     fun observeSeries(category: VodCategory): Flow<List<Series>>
 
@@ -57,6 +71,7 @@ internal class RoomVodRepository
         private val dao: VodDao,
         private val playlists: PlaylistDao,
         private val importer: VodImporter,
+        private val library: LibraryDao,
     ) : VodRepository {
         override fun observeCategories(kind: VodKind): Flow<List<VodCategory>> =
             dao.observeCategories(kind.key).map { rows ->
@@ -68,6 +83,26 @@ internal class RoomVodRepository
 
         override fun observeSeries(category: VodCategory): Flow<List<Series>> =
             dao.observeSeries(category.playlistId, category.name).map { rows -> rows.map { it.toModel() } }
+
+        override fun observeFavoriteMovies(): Flow<List<Movie>> =
+            library.observeFavoriteMovies().map { rows -> rows.map { it.toModel() } }
+
+        override fun observeFavoriteSeries(): Flow<List<Series>> =
+            library.observeFavoriteSeries().map { rows -> rows.map { it.toModel() } }
+
+        override fun observeFavoriteIds(): Flow<Set<String>> = library.observeVodFavoriteIds().map { it.toSet() }
+
+        override suspend fun toggleFavorite(
+            contentId: String,
+            kind: VodKind,
+        ): Boolean =
+            if (library.isVodFavorite(contentId)) {
+                library.removeVodFavorite(contentId)
+                false
+            } else {
+                library.addVodFavorite(contentId, kind.key)
+                true
+            }
 
         override suspend fun movie(id: String): Movie? = dao.movie(id)?.toModel()
 
