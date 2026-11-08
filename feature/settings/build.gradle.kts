@@ -5,3 +5,7 @@ plugins {
 android {
     namespace = "app.ontelevis.feature.settings"
 }
+
+dependencies {
+    implementation(libs.androidx.activity.compose)
+}

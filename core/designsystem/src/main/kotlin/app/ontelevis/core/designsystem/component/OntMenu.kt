@@ -68,7 +68,8 @@ fun OntMenu(
                 title,
                 style = OntTheme.type.itemStrong,
                 color = c.textPrimary,
-                maxLines = 2,
+                // Room for a question (confirmations), not just a title.
+                maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 10.dp),
             )

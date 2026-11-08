@@ -1,8 +1,13 @@
 package app.ontelevis.feature.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.ontelevis.core.data.BackupFile
+import app.ontelevis.core.data.BackupFiles
+import app.ontelevis.core.data.BackupManager
+import app.ontelevis.core.data.BackupSummary
 import app.ontelevis.core.data.LanguageSettings
 import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.PlaylistRepository
@@ -22,6 +27,22 @@ import kotlinx.coroutines.launch
 import java.net.URI
 import javax.inject.Inject
 
+/** What happened to the last backup action. */
+sealed interface BackupMessage {
+    /** Saved; [folder] when it went to Downloads (no file picker). */
+    data class Saved(
+        val folder: String?,
+    ) : BackupMessage
+
+    data class Restored(
+        val recreate: Boolean,
+    ) : BackupMessage
+
+    data object Unreadable : BackupMessage
+
+    data object Failed : BackupMessage
+}
+
 @HiltViewModel
 class SettingsViewModel
     @Inject
@@ -29,7 +50,92 @@ class SettingsViewModel
         private val repository: PlaylistRepository,
         private val languageSettings: LanguageSettings,
         private val parental: ParentalControl,
+        private val backups: BackupManager,
+        val backupFiles: BackupFiles,
     ) : ViewModel() {
+        /** A backup read and waiting for the user's confirmation. */
+        data class PendingRestore(
+            val name: String,
+            val text: String,
+            val summary: BackupSummary,
+        )
+
+        private val _pendingRestore = MutableStateFlow<PendingRestore?>(null)
+        val pendingRestore: StateFlow<PendingRestore?> = _pendingRestore.asStateFlow()
+
+        /** Backups found in Downloads/Ontelevis (TV boxes without a file picker), null when not listed. */
+        private val _downloadBackups = MutableStateFlow<List<BackupFile>?>(null)
+        val downloadBackups: StateFlow<List<BackupFile>?> = _downloadBackups.asStateFlow()
+
+        /** One-off message for the screen (saved, restored, unreadable file...). */
+        private val _backupMessage = MutableStateFlow<BackupMessage?>(null)
+        val backupMessage: StateFlow<BackupMessage?> = _backupMessage.asStateFlow()
+
+        fun consumeBackupMessage() {
+            _backupMessage.value = null
+        }
+
+        fun saveTo(uri: Uri) {
+            viewModelScope.launch {
+                _backupMessage.value =
+                    runCatching { backupFiles.write(uri, backups.export()) }
+                        .fold({ BackupMessage.Saved(null) }, { BackupMessage.Failed })
+            }
+        }
+
+        fun saveToDownloads() {
+            viewModelScope.launch {
+                _backupMessage.value =
+                    runCatching { backupFiles.saveToDownloads(backupFiles.suggestedName(), backups.export()) }
+                        .fold({ BackupMessage.Saved(it) }, { BackupMessage.Failed })
+            }
+        }
+
+        fun listDownloads() {
+            viewModelScope.launch {
+                _downloadBackups.value = runCatching { backupFiles.listDownloads() }.getOrDefault(emptyList())
+            }
+        }
+
+        fun closeDownloads() {
+            _downloadBackups.value = null
+        }
+
+        /** Reads a backup and asks for confirmation (nothing changes yet). */
+        fun open(
+            uri: Uri,
+            name: String,
+        ) {
+            _downloadBackups.value = null
+            viewModelScope.launch {
+                val text = runCatching { backupFiles.read(uri) }.getOrNull()
+                val summary = text?.let { runCatching { backups.summary(it) }.getOrNull() }
+                if (text == null || summary == null) {
+                    _backupMessage.value = BackupMessage.Unreadable
+                } else {
+                    _pendingRestore.value = PendingRestore(name, text, summary)
+                }
+            }
+        }
+
+        fun cancelRestore() {
+            _pendingRestore.value = null
+        }
+
+        /** Replaces the setup by the pending backup. */
+        fun confirmRestore() {
+            val pending = _pendingRestore.value ?: return
+            _pendingRestore.value = null
+            viewModelScope.launch {
+                _backupMessage.value =
+                    runCatching { backups.restore(pending.text) }
+                        .fold({ recreate ->
+                            _language.value = languageSettings.current()
+                            BackupMessage.Restored(recreate)
+                        }, { BackupMessage.Unreadable })
+            }
+        }
+
         val hasPin: StateFlow<Boolean> = parental.hasPin
 
         fun checkPin(pin: String): Boolean = parental.checkPin(pin)

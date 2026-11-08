@@ -1,8 +1,14 @@
 package app.ontelevis.feature.settings
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.os.Environment
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,14 +41,18 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import app.ontelevis.core.data.BackupFiles
 import app.ontelevis.core.designsystem.component.LocalIsTv
 import app.ontelevis.core.designsystem.component.OntCreatePinDialog
 import app.ontelevis.core.designsystem.component.OntIconButton
 import app.ontelevis.core.designsystem.component.OntListItem
+import app.ontelevis.core.designsystem.component.OntMenu
+import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.designsystem.component.OntTopBar
 import app.ontelevis.core.designsystem.component.OntVerifyPinDialog
 import app.ontelevis.core.designsystem.component.SectionLabel
@@ -51,6 +61,8 @@ import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.Playlist
 import app.ontelevis.core.model.PlaylistSource
 import kotlinx.coroutines.delay
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 import app.ontelevis.core.designsystem.R as DesignR
 
@@ -65,7 +77,86 @@ fun SettingsScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val hasPin by viewModel.hasPin.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var pinStep by remember { mutableStateOf(PinStep.NONE) }
+    val pendingRestore by viewModel.pendingRestore.collectAsStateWithLifecycle()
+    val downloadBackups by viewModel.downloadBackups.collectAsStateWithLifecycle()
+    val backupMessage by viewModel.backupMessage.collectAsStateWithLifecycle()
+    // Restoring replaces the PIN too: with a PIN set, it must be entered first.
+    var restorePinCheck by remember { mutableStateOf(false) }
+    val picker = remember { viewModel.backupFiles.hasPicker() }
+    val createDocument =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BackupFiles.MIME)) { uri ->
+            uri?.let(viewModel::saveTo)
+        }
+    val openDocument =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { viewModel.open(it, it.lastPathSegment.orEmpty()) }
+        }
+    // Before Android 10, Downloads needs the storage permission; the action runs once granted.
+    var afterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val storagePermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) afterPermission?.invoke()
+            afterPermission = null
+        }
+
+    fun withStorage(action: () -> Unit) {
+        val needed = viewModel.backupFiles.needsStoragePermission()
+        val granted =
+            !needed ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            action()
+        } else {
+            afterPermission = action
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    fun startRestore() {
+        if (picker) {
+            openDocument.launch(
+                arrayOf(BackupFiles.MIME, "text/plain", "*/*"),
+            )
+        } else {
+            withStorage(viewModel::listDownloads)
+        }
+    }
+    val messages =
+        mapOf(
+            "saved" to stringResource(R.string.settings_backup_saved),
+            "savedIn" to stringResource(R.string.settings_backup_saved_in),
+            "restored" to stringResource(R.string.settings_backup_restored),
+            "unreadable" to stringResource(R.string.settings_backup_unreadable),
+            "failed" to stringResource(R.string.settings_backup_failed),
+        )
+    LaunchedEffect(backupMessage) {
+        val message = backupMessage ?: return@LaunchedEffect
+        viewModel.consumeBackupMessage()
+        val text =
+            when (message) {
+                is BackupMessage.Saved -> {
+                    message.folder?.let { messages.getValue("savedIn").format(it) }
+                        ?: messages.getValue("saved")
+                }
+
+                is BackupMessage.Restored -> {
+                    messages.getValue("restored")
+                }
+
+                BackupMessage.Unreadable -> {
+                    messages.getValue("unreadable")
+                }
+
+                BackupMessage.Failed -> {
+                    messages.getValue("failed")
+                }
+            }
+        Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+        if (message is BackupMessage.Restored && message.recreate) context.findActivity()?.recreate()
+    }
     // The PIN rows change when a PIN is created or removed: focus goes to the row that replaces them.
     val pinRowFocus = remember { FocusRequester() }
     var focusPinRow by remember { mutableStateOf(false) }
@@ -76,7 +167,6 @@ fun SettingsScreen(
             focusPinRow = false
         }
     }
-    val context = LocalContext.current
     val c = OntTheme.colors
     val tv = LocalIsTv.current
     val addFocus = remember { FocusRequester() }
@@ -176,6 +266,40 @@ fun SettingsScreen(
             }
             item {
                 SectionLabel(
+                    stringResource(R.string.settings_backup),
+                    Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                Text(
+                    stringResource(R.string.settings_backup_help),
+                    style = OntTheme.type.meta,
+                    color = c.textMuted,
+                    modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
+                )
+            }
+            item {
+                OntListItem(
+                    text = stringResource(R.string.settings_backup_save),
+                    selected = false,
+                    onClick = {
+                        if (picker) {
+                            createDocument.launch(viewModel.backupFiles.suggestedName())
+                        } else {
+                            withStorage(viewModel::saveToDownloads)
+                        }
+                    },
+                )
+            }
+            item {
+                OntListItem(
+                    text = stringResource(R.string.settings_backup_restore),
+                    selected = false,
+                    onClick = { if (hasPin) restorePinCheck = true else startRestore() },
+                )
+            }
+            item {
+                SectionLabel(
                     stringResource(R.string.settings_language),
                     Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
                 )
@@ -190,6 +314,59 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+    if (restorePinCheck) {
+        OntVerifyPinDialog(
+            title = stringResource(R.string.settings_backup_restore),
+            check = viewModel::checkPin,
+            onSuccess = {
+                restorePinCheck = false
+                startRestore()
+            },
+            onDismiss = { restorePinCheck = false },
+        )
+    }
+    downloadBackups?.let { files ->
+        if (files.isEmpty()) {
+            OntMenu(
+                title =
+                    stringResource(
+                        R.string.settings_backup_none,
+                        "${Environment.DIRECTORY_DOWNLOADS}/${BackupFiles.FOLDER}",
+                    ),
+                options = listOf(OntMenuOption(stringResource(R.string.settings_backup_close)) {}),
+                onDismiss = viewModel::closeDownloads,
+            )
+        } else {
+            val dates = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
+            OntMenu(
+                title = stringResource(R.string.settings_backup_pick),
+                options =
+                    files.take(MAX_LISTED).map { file ->
+                        OntMenuOption(dates.format(Date(file.modifiedAt))) { viewModel.open(file.uri, file.name) }
+                    },
+                onDismiss = viewModel::closeDownloads,
+            )
+        }
+    }
+    pendingRestore?.let { pending ->
+        val summary = pending.summary
+        OntMenu(
+            title =
+                stringResource(
+                    R.string.settings_backup_confirm,
+                    summary.playlists.joinToString(", ").ifEmpty { "-" },
+                    summary.favorites,
+                ),
+            options =
+                listOf(
+                    OntMenuOption(
+                        stringResource(R.string.settings_backup_confirm_cancel),
+                    ) { viewModel.cancelRestore() },
+                    OntMenuOption(stringResource(R.string.settings_backup_confirm_ok)) { viewModel.confirmRestore() },
+                ),
+            onDismiss = viewModel::cancelRestore,
+        )
     }
     val pinTitle = stringResource(R.string.settings_parental)
     when (pinStep) {
@@ -352,6 +529,9 @@ private fun PlaylistRow(
         }
     }
 }
+
+/** Backups listed from Downloads (the newest). */
+private const val MAX_LISTED = 8
 
 /** Where the parental PIN dialogs are. */
 private enum class PinStep { NONE, CREATE, CHANGE_VERIFY, CHANGE_NEW, REMOVE_VERIFY }

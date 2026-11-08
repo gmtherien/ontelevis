@@ -3,6 +3,21 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Backups in Downloads/Ontelevis before Android 10 (Fire OS 6 / 7); later versions need none. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Lets the app see whether a real file picker exists (TV boxes often ship only a stub). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.CREATE_DOCUMENT" />
+            <data android:mimeType="application/json" />
+        </intent>
+    </queries>
 
     <!-- One APK for phones, tablets, Android TV, Google TV and Fire TV. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

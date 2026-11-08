@@ -32,5 +32,17 @@ class VodPrefs
             sorts.getValue(kind).value = sort
         }
 
+        /** Every saved sort, for the backup (kind name -> sort name). */
+        fun allSorts(): Map<String, String> =
+            VodKind.entries.mapNotNull { kind -> sorts.getValue(kind).value?.let { kind.name to it } }.toMap()
+
+        fun restoreSorts(values: Map<String, String>) {
+            VodKind.entries.forEach { kind ->
+                val value = values[kind.name]
+                prefs.edit { if (value == null) remove(key(kind)) else putString(key(kind), value) }
+                sorts.getValue(kind).value = value
+            }
+        }
+
         private fun key(kind: VodKind) = "sort_${kind.name.lowercase()}"
     }

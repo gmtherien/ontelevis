@@ -49,6 +49,13 @@ Owner: gmtherien. Replies in French. Confirm before anything outward-facing (pus
   Favourites, History and search; a playing channel of a closed category stops. Lock/unlock from the
   category hold-OK menu (asks to create a PIN if none). PIN dialogs: `OntVerifyPinDialog` /
   `OntCreatePinDialog` (D-pad keypad + remote number keys).
+- Backup (`BackupManager`, readable JSON, owner's choice): playlists with logins, favourites, VOD
+  favourites, category order / hidden / locks, PIN hash, sorts, language. App ids start with the
+  playlist id, which changes on restore: the file stores the playlist's position + the rest of the id.
+  Restore replaces everything in one transaction, then `PlaylistSync.refreshNow`; asks the PIN first
+  if one is set. Files (`BackupFiles`): phone = system picker; TV (no picker, Android TV ships only
+  `com.android.tv.frameworkpackagestubs`) = Download/Ontelevis via MediaStore (storage permission
+  before Android 10). Android 10+ only lists files this install wrote (not after a reinstall).
 - Playback: one `LivePlayer` (`:core:player`, singleton) shared by the preview and full screen, so
   going full screen never reconnects. `RecoveryPolicy` (unit-tested) decides reconnects; `MainActivity`
   suspends it in `onStop` and resumes in `onStart`. The last channel is saved in `PlaybackPrefs`.

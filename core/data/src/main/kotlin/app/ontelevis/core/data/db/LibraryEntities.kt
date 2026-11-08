@@ -188,6 +188,35 @@ interface LibraryDao {
     @androidx.room.Delete
     suspend fun removeCategoryLock(lock: CategoryLockEntity)
 
+    // Backup and restore (whole tables)
+
+    @Query("SELECT * FROM favorite ORDER BY position")
+    suspend fun allFavorites(): List<FavoriteEntity>
+
+    @Query("SELECT * FROM vod_favorite ORDER BY position")
+    suspend fun allVodFavorites(): List<VodFavoriteEntity>
+
+    @Query("SELECT * FROM group_pref")
+    suspend fun allGroupPrefs(): List<GroupPrefEntity>
+
+    @Query("SELECT * FROM category_lock")
+    suspend fun allCategoryLocks(): List<CategoryLockEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFavorites(rows: List<FavoriteEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertVodFavorites(rows: List<VodFavoriteEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategoryLocks(rows: List<CategoryLockEntity>)
+
+    @Query("DELETE FROM favorite")
+    suspend fun clearFavorites()
+
+    @Query("DELETE FROM vod_favorite")
+    suspend fun clearVodFavorites()
+
     // Categories
 
     @Query("SELECT * FROM group_pref WHERE playlistId = :playlistId")
