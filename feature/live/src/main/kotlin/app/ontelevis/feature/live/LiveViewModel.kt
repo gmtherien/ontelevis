@@ -53,6 +53,15 @@ data class LiveUiState(
     val favoriteIds: Set<String> = emptySet(),
 )
 
+/**
+ * Guide programmes by channel id, for the category [groupKey]: focus waits for them, since a row
+ * without them shows a placeholder block that goes away (with the focus) when they arrive.
+ */
+data class GuideProgrammes(
+    val groupKey: Pair<Long, String>? = null,
+    val byChannel: Map<String, List<Programme>> = emptyMap(),
+)
+
 /** Channels of one category; [groupKey] tells which, so focus waits for the right list. */
 data class GroupChannels(
     val groupKey: Pair<Long, String>? = null,
@@ -151,11 +160,14 @@ class LiveViewModel
 
         /** Programmes of the visible category in the guide window, by channel id. */
         @OptIn(ExperimentalCoroutinesApi::class)
-        val programmes: StateFlow<Map<String, List<Programme>>> =
-            combine(channels, window, epgStamp) { channels, window, _ -> channels.list to window }
+        val programmes: StateFlow<GuideProgrammes> =
+            combine(channels, window, epgStamp) { channels, window, _ -> channels to window }
                 .mapLatest { (channels, window) ->
-                    epgRepository.programmes(channels, window.start.toEpochMilli(), window.end.toEpochMilli())
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+                    GuideProgrammes(
+                        channels.groupKey,
+                        epgRepository.programmes(channels.list, window.start.toEpochMilli(), window.end.toEpochMilli()),
+                    )
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GuideProgrammes())
 
         /** Now and next of the channel in the player (info panel). */
         val playingProgrammes: StateFlow<List<Programme>> =

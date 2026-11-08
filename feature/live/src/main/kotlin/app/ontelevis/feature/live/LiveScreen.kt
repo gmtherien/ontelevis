@@ -164,7 +164,8 @@ fun LiveScreen(
         TvLive(
             state,
             channels,
-            GuideData(programmes, window, now, playingProgrammes),
+            GuideData(programmes.byChannel, window, now, playingProgrammes),
+            programmes.groupKey,
             live,
             viewModel.player,
             actions,
@@ -174,7 +175,7 @@ fun LiveScreen(
             modifier,
         )
     } else {
-        PhoneLive(state, channels.list, programmes, now, actions, modifier)
+        PhoneLive(state, channels.list, programmes.byChannel, now, actions, modifier)
     }
 }
 
@@ -259,6 +260,8 @@ private fun TvLive(
     state: LiveUiState,
     channelsState: GroupChannels,
     guide: GuideData,
+    /** Category the guide programmes were loaded for. */
+    programmesFor: Pair<Long, String>?,
     live: LiveState,
     player: Player?,
     actions: LiveActions,
@@ -283,8 +286,10 @@ private fun TvLive(
     // Each category opens at the top of its guide.
     val guideList = remember(groupKey) { LazyListState() }
     var returnFocus by rememberSaveable { mutableStateOf(ReturnFocus.NONE) }
-    // OK on a category: focus follows into the guide once that category's channels are loaded.
-    var guideFocusPending by remember { mutableStateOf(false) }
+    // OK on a category: focus follows into the guide once *that* category's channels are loaded.
+    // The key of the category, not a flag: for a moment the selection and the channels are still the
+    // previous category's, and focusing that old list lost the focus when it was replaced.
+    var guideFocusFor by remember { mutableStateOf<Pair<Long, String>?>(null) }
     // Panel row holding the focus requester: the selected category unless another row needs focus.
     var panelFocusKey by remember { mutableStateOf<String?>(null) }
     var channelMenu by remember { mutableStateOf<Channel?>(null) }
@@ -387,13 +392,13 @@ private fun TvLive(
             }
         }
     }
-    LaunchedEffect(channelsState, guideFocusPending) {
-        val group = latestState.selectedGroup ?: return@LaunchedEffect
-        if (guideFocusPending && channelsState.groupKey == group.key) {
+    LaunchedEffect(channelsState, programmesFor, guideFocusFor) {
+        val target = guideFocusFor ?: return@LaunchedEffect
+        if (channelsState.groupKey == target && programmesFor == target && latestState.selectedGroup?.key == target) {
             // An empty shortcut has nothing to focus: stay on the category.
             if (channelsState.list.isNotEmpty()) focusGuide()
-            // Reset last: this flag is a key of the effect, resetting it first cancelled the scroll above.
-            guideFocusPending = false
+            // Reset last: this is a key of the effect, resetting it first cancelled the scroll above.
+            guideFocusFor = null
         }
     }
     // The moved category keeps the focus at its new place.
@@ -445,7 +450,9 @@ private fun TvLive(
                 moving = moving,
                 onSelect = { group ->
                     actions.select(group)
-                    guideFocusPending = true
+                    // The panel's focus anchor follows the new selection.
+                    panelFocusKey = null
+                    guideFocusFor = group.key
                 },
                 onMenu = { groupMenu = it },
                 onMove = { step -> moving?.let { actions.moveGroup(it, step) } },
