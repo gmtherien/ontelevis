@@ -33,4 +33,7 @@
     <string name="stats_network">Network %1$s</string>
     <string name="stats_buffer">Buffer %1$s · dropped frames %2$d</string>
     <string name="player_track_number">Track %d</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_resume">Resume</string>
+    <string name="player_back_to_live">Back to live</string>
 </resources>

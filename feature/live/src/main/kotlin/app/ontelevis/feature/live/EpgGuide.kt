@@ -97,8 +97,8 @@ internal class GuideActions(
     val open: (Channel) -> Unit,
     /** Left from the first block of a row: back to the categories. */
     val leftEdge: () -> Unit,
-    /** Hold OK on a block: the channel's menu (favourites). */
-    val menu: (Channel) -> Unit,
+    /** Hold OK on a block: the channel's menu, with that programme (null for a row without guide). */
+    val menu: (Channel, Programme?) -> Unit,
     /** A block took the focus: its channel and programme (null: no guide for that channel). */
     val focused: (Channel, Programme?) -> Unit,
     /** OK on a past programme that can be replayed (catch-up). */
@@ -167,6 +167,8 @@ internal fun EpgGuide(
     /** Back from a catch-up recording: (channel id, programme start). The guide opens on it. */
     replayTarget: Pair<String, Long>? = null,
     replayFocus: FocusRequester? = null,
+    /** Programme starts with a reminder, by channel id (bell on their blocks). */
+    reminders: Map<String, Set<Long>> = emptyMap(),
 ) {
     val c = OntTheme.colors
     val times = rememberTimeFormatter()
@@ -278,6 +280,7 @@ internal fun EpgGuide(
                         now = now,
                         playing = channel.id == playingId,
                         favorite = channel.id in favoriteIds,
+                        reminderStarts = reminders[channel.id].orEmpty(),
                         groupName = groupName,
                         times = times,
                         timeline = timeline,
@@ -405,6 +408,7 @@ private fun GuideRow(
     now: () -> Instant,
     playing: Boolean,
     favorite: Boolean,
+    reminderStarts: Set<Long>,
     groupName: String,
     times: DateTimeFormatter,
     timeline: Timeline,
@@ -513,7 +517,7 @@ private fun GuideRow(
                     onVertical = { step -> vertical(rowIndex, step, null) },
                     replayable = false,
                     onClick = { actions.open(channel) },
-                    onLongClick = { actions.menu(channel) },
+                    onLongClick = { actions.menu(channel, null) },
                     onFocused = {
                         anchor.focused(null)
                         actions.focused(channel, null)
@@ -579,6 +583,7 @@ private fun GuideRow(
                             playingFocus = playingFocus,
                             entryFocus = entryFocus,
                             replayFocus = replayFocus.takeIf { programme.startMillis == replayStart },
+                            reminder = programme.startMillis in reminderStarts,
                             previous = blockFocus.getOrNull(index - 1),
                             next = blockFocus.getOrNull(index + 1),
                             onVertical = { step -> vertical(rowIndex, step, null) },
@@ -630,6 +635,7 @@ private fun ProgrammeBlock(
     playingFocus: FocusRequester?,
     entryFocus: FocusRequester?,
     replayFocus: FocusRequester?,
+    reminder: Boolean,
     previous: FocusRequester?,
     next: FocusRequester?,
     onVertical: (Int) -> Boolean,
@@ -680,8 +686,9 @@ private fun ProgrammeBlock(
         next = next.takeIf { !isLast },
         onVertical = onVertical,
         replayable = replayable,
+        reminder = reminder && state == ProgramState.UPCOMING,
         onClick = { if (replayable) actions.replay(channel, programme) else actions.open(channel) },
-        onLongClick = { actions.menu(channel) },
+        onLongClick = { actions.menu(channel, programme) },
         onFocused = {
             // Chosen with Left / Right (or entering the guide): this programme's time becomes the
             // reference for Up / Down; the programme on now means "now".
@@ -719,6 +726,7 @@ private fun Block(
     onLongClick: () -> Unit,
     onFocused: () -> Unit,
     actions: GuideActions,
+    reminder: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val inset = OntDimens.EpgBlockInsetH / 2
@@ -731,6 +739,7 @@ private fun Block(
         onClick = onClick,
         onLongClick = onLongClick,
         replayable = replayable,
+        reminder = reminder,
         playing = playing,
         progress = progress,
         modifier =

@@ -7,11 +7,13 @@ import app.ontelevis.core.data.db.GroupPrefEntity
 import app.ontelevis.core.data.db.HistoryEntity
 import app.ontelevis.core.data.db.LibraryDao
 import app.ontelevis.core.data.db.PlaylistDao
+import app.ontelevis.core.data.db.channelSearchKey
 import app.ontelevis.core.data.importer.PlaylistImporter
 import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.ChannelGroup
 import app.ontelevis.core.parser.xtream.XtreamUrls
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import javax.inject.Inject
@@ -62,6 +64,9 @@ interface ChannelRepository {
 
     /** Channels of the category [channel] belongs to, in provider order (for CH+ / CH-). */
     suspend fun channelsAround(channel: Channel): List<Channel>
+
+    /** Channels whose name matches [query] ("RDS", "TSN 2"), best first: for voice search. */
+    suspend fun findByName(query: String): List<Channel>
 }
 
 internal class RoomChannelRepository
@@ -136,6 +141,16 @@ internal class RoomChannelRepository
 
         override suspend fun channel(id: String): Channel? = channelDao.get(id)?.toModel()
 
+        override suspend fun findByName(query: String): List<Channel> {
+            val key = channelSearchKey(query)
+            if (key.isEmpty()) return emptyList()
+            val candidates = channelDao.search(likePattern(key), NAME_SEARCH_LIMIT)
+            val favorites = libraryDao.observeFavoriteIds().first().toSet()
+            val recent = libraryDao.observeHistory().first().map { it.id }
+            return bestChannelMatches(query, candidates, { it.searchKey }, { it.id }, favorites, recent)
+                .map { it.toModel() }
+        }
+
         override suspend fun catchupUrl(
             channel: Channel,
             startMillis: Long,
@@ -174,3 +189,5 @@ private fun ChannelEntity.toModel() =
         epgId = epgId,
         catchupDays = catchupDays,
     )
+
+private const val NAME_SEARCH_LIMIT = 300

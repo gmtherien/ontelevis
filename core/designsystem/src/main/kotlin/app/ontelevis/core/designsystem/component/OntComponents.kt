@@ -322,6 +322,8 @@ fun EpgProgramBlock(
     onLongClick: (() -> Unit)? = null,
     /** A past programme that can be replayed (catch-up): rewind mark, brighter title. */
     replayable: Boolean = false,
+    /** A reminder is set for this programme: bell mark. */
+    reminder: Boolean = false,
 ) {
     val c = OntTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -392,6 +394,14 @@ fun EpgProgramBlock(
                             painterResource(R.drawable.ont_ic_clock_counter_clockwise),
                             contentDescription = null,
                             tint = if (focused) c.onFocus else c.textMuted,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
+                    if (reminder) {
+                        Icon(
+                            painterResource(R.drawable.ont_ic_bell),
+                            contentDescription = null,
+                            tint = if (focused) c.onFocus else c.accent,
                             modifier = Modifier.size(12.dp),
                         )
                     }

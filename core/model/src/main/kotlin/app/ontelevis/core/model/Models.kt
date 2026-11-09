@@ -195,6 +195,29 @@ data class Series(
     val rating: Double,
 )
 
+/** A started movie or episode ("Continue watching"). */
+data class ContinueItem(
+    /** Movie or episode id (what to play). */
+    val contentId: String,
+    /** Movie name, or series name for an episode. */
+    val title: String,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    /** Series of the episode, null for a movie. */
+    val seriesId: String?,
+    val season: Int,
+    val episode: Int,
+    val episodeTitle: String?,
+    val positionMs: Long,
+    val durationMs: Long,
+    /** Epoch millis it was last watched. */
+    val updatedAt: Long,
+    val playlistId: Long,
+    val group: String,
+) {
+    val progress: Float get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+}
+
 data class Episode(
     /** `playlistId::rawId`. */
     val id: String,

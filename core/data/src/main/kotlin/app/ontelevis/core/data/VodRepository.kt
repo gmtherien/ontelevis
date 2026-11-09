@@ -11,6 +11,7 @@ import app.ontelevis.core.data.db.VodDao
 import app.ontelevis.core.data.db.WatchProgressEntity
 import app.ontelevis.core.data.importer.RefreshException
 import app.ontelevis.core.data.importer.VodImporter
+import app.ontelevis.core.model.ContinueItem
 import app.ontelevis.core.model.Episode
 import app.ontelevis.core.model.Movie
 import app.ontelevis.core.model.MovieDetails
@@ -26,6 +27,15 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 interface VodRepository {
+    /** Started movies and episodes (one per series, its last episode), last watched first. */
+    fun observeContinueWatching(limit: Int = HOME_ROW_LIMIT): Flow<List<ContinueItem>>
+
+    /** Newest movies by the provider's "added" date. */
+    fun observeRecentMovies(limit: Int = HOME_ROW_LIMIT): Flow<List<Movie>>
+
+    /** Series with the most recent new episodes. */
+    fun observeRecentSeries(limit: Int = HOME_ROW_LIMIT): Flow<List<Series>>
+
     fun observeCategories(kind: VodKind): Flow<List<VodCategory>>
 
     fun observeMovies(category: VodCategory): Flow<List<Movie>>
@@ -88,6 +98,37 @@ internal class RoomVodRepository
         private val importer: VodImporter,
         private val library: LibraryDao,
     ) : VodRepository {
+        override fun observeContinueWatching(limit: Int): Flow<List<ContinueItem>> =
+            // Read more rows than shown: older episodes of the same series are dropped.
+            dao.observeInProgress(limit * 4).map { rows ->
+                rows
+                    .distinctBy { it.seriesId ?: it.contentId }
+                    .take(limit)
+                    .map {
+                        ContinueItem(
+                            contentId = it.contentId,
+                            title = it.title,
+                            posterUrl = it.posterUrl,
+                            backdropUrl = it.backdropUrl,
+                            seriesId = it.seriesId,
+                            season = it.season,
+                            episode = it.episode,
+                            episodeTitle = it.episodeTitle,
+                            positionMs = it.positionMs,
+                            durationMs = it.durationMs,
+                            updatedAt = it.updatedAt,
+                            playlistId = it.playlistId,
+                            group = it.groupName,
+                        )
+                    }
+            }
+
+        override fun observeRecentMovies(limit: Int): Flow<List<Movie>> =
+            dao.observeRecentMovies(limit).map { rows -> rows.map { it.toModel() } }
+
+        override fun observeRecentSeries(limit: Int): Flow<List<Series>> =
+            dao.observeRecentSeries(limit).map { rows -> rows.map { it.toModel() } }
+
         override fun observeCategories(kind: VodKind): Flow<List<VodCategory>> =
             dao.observeCategories(kind.key).map { rows ->
                 rows.map { VodCategory(it.playlistId, kind, it.name, it.count) }
@@ -214,6 +255,9 @@ private val VodKind.key: String get() = if (this == VodKind.MOVIE) VOD_MOVIE els
 
 /** Search results are capped: a two-letter search on a big panel matches tens of thousands of titles. */
 const val SEARCH_LIMIT = 500
+
+/** Titles in each row of the Home screen. */
+const val HOME_ROW_LIMIT = 20
 
 /** `%text%` for LIKE, with LIKE's own wildcards in the text escaped. */
 internal fun likePattern(text: String): String =

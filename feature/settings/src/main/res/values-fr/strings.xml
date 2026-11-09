@@ -117,4 +117,9 @@
     <string name="settings_playback_format">Format d’image</string>
     <string name="settings_playback_auto">Celle du flux</string>
     <string name="settings_playback_subtitles_off">Désactivés</string>
+    <string name="settings_start">Ouvrir au démarrage</string>
+    <string name="settings_start_tv">Télé (la dernière chaîne joue)</string>
+    <string name="settings_start_home">Accueil</string>
+    <string name="settings_playback_timeshift">Pause du direct</string>
+    <string name="settings_playback_timeshift_help">Lecture/Pause met une chaîne en pause et la reprend là où elle s’est arrêtée. Utilise jusqu’à 1 Go de stockage pendant l’écoute (environ 15 minutes).</string>
 </resources>

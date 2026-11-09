@@ -111,4 +111,9 @@
     <string name="settings_playback_format">Picture format</string>
     <string name="settings_playback_auto">Stream default</string>
     <string name="settings_playback_subtitles_off">Off</string>
+    <string name="settings_start">Open at start</string>
+    <string name="settings_start_tv">TV (the last channel plays)</string>
+    <string name="settings_start_home">Home</string>
+    <string name="settings_playback_timeshift">Live pause</string>
+    <string name="settings_playback_timeshift_help">Play/Pause pauses a live channel and resumes it where it stopped. Uses up to 1 GB of storage while watching (about 15 minutes).</string>
 </resources>

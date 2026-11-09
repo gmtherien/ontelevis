@@ -191,6 +191,7 @@ internal class VodWriter(
             rating = rating,
             sortOrder = sortOrder,
             searchKey = searchKeyOf(name),
+            lastModified = lastModified,
         )
 
     private fun ImportedEpisode.toEntity() =

@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -32,6 +33,8 @@ import app.ontelevis.core.designsystem.component.OntNavRailScaffold
 import app.ontelevis.core.designsystem.component.OntRailItem
 import app.ontelevis.core.model.VodKind
 import app.ontelevis.core.playerui.SleepTimerHost
+import app.ontelevis.feature.home.HomeRoute
+import app.ontelevis.feature.home.HomeScreen
 import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AccountWarning
@@ -48,14 +51,16 @@ import app.ontelevis.feature.vod.VodBrowseScreen
 import app.ontelevis.feature.vod.VodPlayerRoute
 import app.ontelevis.feature.vod.VodPlayerScreen
 import app.ontelevis.core.designsystem.R as DesignR
+import app.ontelevis.feature.home.R as HomeR
 import app.ontelevis.feature.live.R as LiveR
 import app.ontelevis.feature.settings.R as SettingsR
 import app.ontelevis.feature.vod.R as VodR
 
-private enum class RailKey { TV, MOVIES, SERIES, UPDATE, SETTINGS }
+private enum class RailKey { HOME, TV, MOVIES, SERIES, UPDATE, SETTINGS }
 
 private fun NavDestination.railKey(): RailKey =
     when {
+        hasRoute(HomeRoute::class) -> RailKey.HOME
         hasRoute(LiveRoute::class) || hasRoute(PlayerRoute::class) -> RailKey.TV
         hasRoute(MoviesRoute::class) || hasRoute(MovieRoute::class) -> RailKey.MOVIES
         hasRoute(SeriesListRoute::class) || hasRoute(SeriesRoute::class) -> RailKey.SERIES
@@ -68,7 +73,8 @@ private const val DEFAULT_FADE_MS = 200
 
 /** Screens where Back first goes up to the rail (the top of each rail destination). */
 private fun NavDestination.isRailTop(): Boolean =
-    hasRoute(LiveRoute::class) || hasRoute(MoviesRoute::class) || hasRoute(SeriesListRoute::class)
+    hasRoute(HomeRoute::class) || hasRoute(LiveRoute::class) || hasRoute(MoviesRoute::class) ||
+        hasRoute(SeriesListRoute::class)
 
 /** Full-screen players hide the rail. */
 private fun NavDestination.isPlayer(): Boolean = hasRoute(PlayerRoute::class) || hasRoute(VodPlayerRoute::class)
@@ -78,7 +84,7 @@ private fun NavDestination.isPlayer(): Boolean = hasRoute(PlayerRoute::class) ||
  * V1 destinations: TV, Movies, Series, Update content, Settings.
  */
 @Composable
-fun TvApp() {
+fun TvApp(start: StartViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -102,6 +108,11 @@ fun TvApp() {
         groups =
             listOf(
                 listOf(
+                    OntRailItem(
+                        RailKey.HOME,
+                        DesignR.drawable.ont_ic_house,
+                        stringResource(HomeR.string.home_title),
+                    ),
                     OntRailItem(
                         RailKey.TV,
                         DesignR.drawable.ont_ic_television,
@@ -147,6 +158,7 @@ fun TvApp() {
             } else {
                 navController.goTo(
                     when (key) {
+                        RailKey.HOME -> HomeRoute
                         RailKey.TV -> LiveRoute
                         RailKey.MOVIES -> MoviesRoute
                         RailKey.SERIES -> SeriesListRoute
@@ -158,7 +170,7 @@ fun TvApp() {
     ) {
         NavHost(
             navController = navController,
-            startDestination = LiveRoute,
+            startDestination = start.startRoute,
             // Into and out of a full-screen player: a plain cut. The default 700 ms crossfade drew both
             // screens at once while the TV screen was being rebuilt, which stuttered on TV boxes.
             enterTransition = {
@@ -195,6 +207,7 @@ fun TvApp() {
                 )
             }
             composable<PlayerRoute> { PlayerScreen() }
+            composable<HomeRoute> { HomeDestination(navController) }
             vodDestinations(navController, onPosterModeChange = { wideContent = it })
             composable<SettingsRoute> { SettingsScreen(onAddPlaylist = { navController.navigate(AddPlaylistRoute) }) }
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
@@ -204,6 +217,8 @@ fun TvApp() {
     AccountWarning()
     // Sleep timer ran out: "Still watching?", then playback stops and the app leaves the players.
     SleepTimerHost(onStopped = { navController.goTo(LiveRoute) })
+    // Reminders, Google TV and voice searches open their channel or title.
+    LaunchHost(navController)
     // New version on GitHub: asked at each start, never over a full-screen player.
     UpdatePrompt(allowed = destination != null && !destination.isPlayer())
 }
@@ -238,14 +253,25 @@ internal fun androidx.navigation.NavGraphBuilder.vodDestinations(
     }
 }
 
+/** Home: resumes in the player, opens movie and series pages (shared by the TV and phone shells). */
+@Composable
+internal fun HomeDestination(navController: NavHostController) {
+    HomeScreen(
+        onPlay = { navController.navigate(VodPlayerRoute(it)) },
+        onOpenMovie = { navController.navigate(MovieRoute(it)) },
+        onOpenSeries = { navController.navigate(SeriesRoute(it)) },
+    )
+}
+
 /**
  * Top-level switch: one copy of each destination in the back stack, Back returns to the start.
- * The start destination (TV) is never saved or restored: restoring it would bring back the
- * screens that were above it.
+ * The start destination (TV or Home, see Settings) is never saved or restored: restoring it would
+ * bring back the screens that were above it.
  */
 internal fun NavHostController.goTo(route: Any) {
-    if (route == LiveRoute) {
-        popBackStack(LiveRoute, inclusive = false)
+    val start = graph.findStartDestination()
+    if (start.hasRoute(route::class)) {
+        popBackStack(start.id, inclusive = false)
         return
     }
     navigate(route) {

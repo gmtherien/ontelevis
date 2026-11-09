@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.ontelevis.core.designsystem.component.OntMenu
 import app.ontelevis.core.designsystem.component.OntMenuOption
 import app.ontelevis.core.model.PictureFormat
+import app.ontelevis.core.player.LivePlayer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -24,6 +25,7 @@ class PlayerOptionsViewModel
     constructor(
         val options: PlaybackOptions,
         val sleepTimer: SleepTimer,
+        val livePlayer: LivePlayer,
     ) : ViewModel()
 
 private enum class Page { MAIN, AUDIO, SUBTITLES, FORMAT, SLEEP }
@@ -43,6 +45,7 @@ fun PlayerOptionsMenu(
     val format by session.format.collectAsStateWithLifecycle()
     val showStats by settings.showStats.collectAsStateWithLifecycle()
     val sleepEndsAt by viewModel.sleepTimer.endsAt.collectAsStateWithLifecycle()
+    val liveState by viewModel.livePlayer.state.collectAsStateWithLifecycle()
     var page by remember { mutableStateOf(Page.MAIN) }
     val unnamed = stringResource(R.string.player_track_number)
     val back = { page = Page.MAIN }
@@ -57,23 +60,42 @@ fun PlayerOptionsMenu(
             val sleepValue =
                 viewModel.sleepTimer.minutesLeft()?.let { pluralStringResource(R.plurals.sleep_left, it, it) }
                     ?: stringResource(R.string.sleep_off)
+            // Live pause, for remotes without Play/Pause and for touch screens.
+            val pauseOptions =
+                if (!live) {
+                    emptyList()
+                } else {
+                    listOfNotNull(
+                        OntMenuOption(
+                            stringResource(if (liveState.paused) R.string.player_resume else R.string.player_pause),
+                        ) {
+                            viewModel.livePlayer.togglePause()
+                            onDismiss()
+                        }.takeIf { viewModel.livePlayer.canPause || liveState.paused },
+                        OntMenuOption(stringResource(R.string.player_back_to_live)) {
+                            viewModel.livePlayer.backToLive()
+                            onDismiss()
+                        }.takeIf { liveState.paused || liveState.behindMs > 0 },
+                    )
+                }
             OntMenu(
                 title = stringResource(R.string.player_options),
                 options =
-                    listOf(
-                        OntMenuOption(value(R.string.player_audio, audioValue)) { page = Page.AUDIO },
-                        OntMenuOption(value(R.string.player_subtitles, subtitleValue)) { page = Page.SUBTITLES },
-                        OntMenuOption(value(R.string.player_format, stringResource(format.label))) {
-                            page = Page.FORMAT
-                        },
-                        OntMenuOption(
-                            value(
-                                R.string.player_stats,
-                                stringResource(if (showStats) R.string.player_shown else R.string.player_hidden),
-                            ),
-                        ) { settings.setShowStats(!showStats) },
-                        OntMenuOption(value(R.string.player_sleep, sleepValue)) { page = Page.SLEEP },
-                    ),
+                    pauseOptions +
+                        listOf(
+                            OntMenuOption(value(R.string.player_audio, audioValue)) { page = Page.AUDIO },
+                            OntMenuOption(value(R.string.player_subtitles, subtitleValue)) { page = Page.SUBTITLES },
+                            OntMenuOption(value(R.string.player_format, stringResource(format.label))) {
+                                page = Page.FORMAT
+                            },
+                            OntMenuOption(
+                                value(
+                                    R.string.player_stats,
+                                    stringResource(if (showStats) R.string.player_shown else R.string.player_hidden),
+                                ),
+                            ) { settings.setShowStats(!showStats) },
+                            OntMenuOption(value(R.string.player_sleep, sleepValue)) { page = Page.SLEEP },
+                        ),
                 onDismiss = onDismiss,
                 dismissOnSelect = false,
             )

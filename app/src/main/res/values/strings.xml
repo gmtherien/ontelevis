@@ -3,4 +3,9 @@
     <string name="app_name" translatable="false">Ontelevis</string>
     <string name="content_update">Update content</string>
     <string name="content_update_started">Updating your playlists…</string>
+    <string name="reminder_now">“%1$s” starts at %2$s on %3$s.</string>
+    <string name="reminder_watch">Watch</string>
+    <string name="reminder_close">Close</string>
+    <string name="search_not_found">Nothing found for “%1$s”.</string>
+    <string name="search_hint">Channel, movie or series</string>
 </resources>

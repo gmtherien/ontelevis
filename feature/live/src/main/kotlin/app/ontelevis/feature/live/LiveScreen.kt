@@ -1,7 +1,12 @@
 package app.ontelevis.feature.live
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -68,6 +73,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
@@ -125,6 +131,8 @@ private class LiveActions(
     val setLocked: (ChannelGroup, Boolean) -> Unit,
     /** The programme with its description (the guide grid has none). */
     val describe: suspend (Channel, Programme) -> Programme = { _, p -> p },
+    /** Returns true when a reminder is now set for the programme. */
+    val toggleReminder: suspend (Channel, Programme) -> Boolean = { _, _ -> false },
 )
 
 /**
@@ -170,12 +178,14 @@ fun LiveScreen(
                 unlock = viewModel::unlock,
                 setLocked = viewModel::setLocked,
                 describe = viewModel::describe,
+                toggleReminder = viewModel::toggleReminder,
                 replay = { channel, programme ->
                     viewModel.lastReplay = channel.id to programme.startMillis
                     onOpenCatchup(channel.id, programme.startMillis, programme.stopMillis, programme.title)
                 },
             )
         }
+    val reminders by viewModel.reminders.collectAsStateWithLifecycle()
     if (LocalIsTv.current) {
         TvLive(
             state,
@@ -191,6 +201,7 @@ fun LiveScreen(
             viewModel.lastReplay,
             { viewModel.lastReplay = null },
             modifier,
+            reminders = reminders,
         )
     } else {
         var phonePin by remember { mutableStateOf<ChannelGroup?>(null) }
@@ -268,6 +279,12 @@ private val LiveUiState.status: LiveStatus
             else -> LiveStatus.NOT_LOADED
         }
 
+/** Hold OK in the guide: the channel, and the programme the focus was on. */
+private data class ChannelMenu(
+    val channel: Channel,
+    val programme: Programme?,
+)
+
 /** Guide data for the TV screen. */
 private class GuideData(
     val programmes: Map<String, List<Programme>>,
@@ -332,6 +349,8 @@ private fun TvLive(
     replayTarget: Pair<String, Long>?,
     clearReplayTarget: () -> Unit,
     modifier: Modifier,
+    /** Programme starts with a reminder, by channel id. */
+    reminders: Map<String, Set<Long>> = emptyMap(),
 ) {
     val c = OntTheme.colors
     val context = LocalContext.current
@@ -354,7 +373,7 @@ private fun TvLive(
     var guideFocusFor by remember { mutableStateOf<Pair<Long, String>?>(null) }
     // Panel row holding the focus requester: the selected category unless another row needs focus.
     var panelFocusKey by remember { mutableStateOf<String?>(null) }
-    var channelMenu by remember { mutableStateOf<Channel?>(null) }
+    var channelMenu by remember { mutableStateOf<ChannelMenu?>(null) }
     var groupMenu by remember { mutableStateOf<ChannelGroup?>(null) }
     var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
     // Category being moved with Up / Down (hold OK > Move).
@@ -496,7 +515,7 @@ private fun TvLive(
                     }
                 },
                 leftEdge = { scope.launch { focusCategory() } },
-                menu = { channelMenu = it },
+                menu = { channel, programme -> channelMenu = ChannelMenu(channel, programme) },
                 focused = { channel, programme ->
                     guideFocus = GuideFocus(channel, programme)
                     // Catch-up: nearing the start of the window, the guide reaches further into the past.
@@ -632,6 +651,7 @@ private fun TvLive(
                             entry = guideEntry,
                             playingRowFocus = playingRowFocus,
                             actions = guideActions,
+                            reminders = reminders,
                             replayTarget = replayTarget,
                             replayFocus = replayFocus,
                             modifier =
@@ -646,14 +666,39 @@ private fun TvLive(
         }
     }
 
-    channelMenu?.let { channel ->
+    val notificationPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    channelMenu?.let { (channel, programme) ->
         val favorite = channel.id in state.favoriteIds
+        val reminderSet = stringResource(R.string.live_reminder_set)
+        val reminderRemoved = stringResource(R.string.live_reminder_removed)
+        // Upcoming programme: remind me (hold OK on a programme that has not started).
+        val reminderOption =
+            programme?.takeIf { it.startMillis > System.currentTimeMillis() }?.let { upcoming ->
+                val reminded = upcoming.startMillis in reminders[channel.id].orEmpty()
+                OntMenuOption(
+                    stringResource(if (reminded) R.string.live_menu_remove_reminder else R.string.live_menu_remind),
+                ) {
+                    scope.launch {
+                        val set = actions.toggleReminder(channel, upcoming)
+                        Toast.makeText(context, if (set) reminderSet else reminderRemoved, Toast.LENGTH_SHORT).show()
+                        if (set &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
+            }
         val added = stringResource(R.string.live_favorite_added)
         val removed = stringResource(R.string.live_favorite_removed)
         OntMenu(
-            title = parseChannelName(channel.name).title,
+            title = programme?.takeIf { reminderOption != null }?.title ?: parseChannelName(channel.name).title,
             options =
-                listOf(
+                listOfNotNull(
+                    reminderOption,
                     OntMenuOption(
                         stringResource(
                             if (favorite) R.string.live_menu_remove_favorite else R.string.live_menu_add_favorite,

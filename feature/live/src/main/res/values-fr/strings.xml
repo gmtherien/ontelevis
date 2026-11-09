@@ -57,4 +57,12 @@
         <item quantity="many">reste %d min</item>
         <item quantity="other">reste %d min</item>
     </plurals>
+    <string name="live_menu_remind">Me rappeler</string>
+    <string name="live_menu_remove_reminder">Annuler le rappel</string>
+    <string name="live_reminder_set">Rappel ajouté : vous serez averti avant le début.</string>
+    <string name="live_reminder_removed">Rappel annulé</string>
+    <string name="live_paused">EN PAUSE</string>
+    <string name="live_paused_hint">Lecture/Pause reprend là où ça s’est arrêté</string>
+    <string name="live_behind">−%1$s</string>
+    <string name="live_behind_hint">En différé · ▶ ou Avance rapide : retour au direct</string>
 </resources>

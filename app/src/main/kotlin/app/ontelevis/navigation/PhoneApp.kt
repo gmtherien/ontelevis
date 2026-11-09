@@ -13,12 +13,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.ontelevis.core.playerui.SleepTimerHost
+import app.ontelevis.feature.home.HomeRoute
 import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AccountWarning
@@ -29,6 +31,7 @@ import app.ontelevis.feature.vod.MoviesRoute
 import app.ontelevis.feature.vod.SeriesListRoute
 import app.ontelevis.feature.vod.VodPlayerRoute
 import app.ontelevis.core.designsystem.R as DesignR
+import app.ontelevis.feature.home.R as HomeR
 import app.ontelevis.feature.live.R as LiveR
 import app.ontelevis.feature.settings.R as SettingsR
 import app.ontelevis.feature.vod.R as VodR
@@ -38,6 +41,7 @@ private enum class PhoneTab(
     @param:StringRes val title: Int,
     @param:DrawableRes val icon: Int,
 ) {
+    HOME(HomeRoute, HomeR.string.home_title, DesignR.drawable.ont_ic_house),
     TV(LiveRoute, LiveR.string.feature_live_title, DesignR.drawable.ont_ic_television),
     MOVIES(MoviesRoute, VodR.string.vod_movies, DesignR.drawable.ont_ic_film_strip),
     SERIES(SeriesListRoute, VodR.string.vod_series, DesignR.drawable.ont_ic_monitor_play),
@@ -46,7 +50,7 @@ private enum class PhoneTab(
 
 /** Phone / tablet: bottom navigation bar. */
 @Composable
-fun PhoneApp() {
+fun PhoneApp(start: StartViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val current = backStackEntry?.destination
@@ -72,7 +76,7 @@ fun PhoneApp() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = LiveRoute,
+            startDestination = start.startRoute,
             modifier = Modifier.padding(padding),
         ) {
             composable<LiveRoute> {
@@ -82,6 +86,7 @@ fun PhoneApp() {
                 )
             }
             composable<PlayerRoute> { PlayerScreen() }
+            composable<HomeRoute> { HomeDestination(navController) }
             vodDestinations(navController)
             composable<SettingsRoute> { SettingsScreen(onAddPlaylist = { navController.navigate(AddPlaylistRoute) }) }
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
@@ -91,6 +96,8 @@ fun PhoneApp() {
     AccountWarning()
     // Sleep timer ran out: "Still watching?", then playback stops and the app leaves the players.
     SleepTimerHost(onStopped = { navController.goTo(LiveRoute) })
+    // Reminders, Google TV and voice searches open their channel or title.
+    LaunchHost(navController)
     // New version on GitHub: asked at each start, never over a full-screen player.
     UpdatePrompt(
         allowed =

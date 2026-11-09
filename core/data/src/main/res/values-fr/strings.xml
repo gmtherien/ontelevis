@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminder_channel">Rappels de programmes</string>
+    <string name="reminder_text">Commence à %1$s sur %2$s</string>
+    <string name="reminder_watch">Regarder</string>
+</resources>

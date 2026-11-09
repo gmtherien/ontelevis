@@ -55,4 +55,12 @@
         <item quantity="one">%d min left</item>
         <item quantity="other">%d min left</item>
     </plurals>
+    <string name="live_menu_remind">Remind me</string>
+    <string name="live_menu_remove_reminder">Cancel the reminder</string>
+    <string name="live_reminder_set">Reminder set: you will be told before it starts.</string>
+    <string name="live_reminder_removed">Reminder cancelled</string>
+    <string name="live_paused">PAUSED</string>
+    <string name="live_paused_hint">Play/Pause resumes where it stopped</string>
+    <string name="live_behind">−%1$s</string>
+    <string name="live_behind_hint">Behind live · ▶ or Fast-forward: back to live</string>
 </resources>

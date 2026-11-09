@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -12,6 +13,9 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.extractor.DefaultExtractorsFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -38,14 +42,7 @@ class PlayerFactory
                 DefaultRenderersFactory(context)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
                     .setEnableDecoderFallback(true)
-            val http =
-                DefaultHttpDataSource
-                    .Factory()
-                    .setUserAgent(USER_AGENT)
-                    .setAllowCrossProtocolRedirects(true)
-                    .setConnectTimeoutMs(15_000)
-                    .setReadTimeoutMs(30_000)
-            val mediaSources = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+            val mediaSources = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http()))
             val loadControl =
                 DefaultLoadControl
                     .Builder()
@@ -74,6 +71,29 @@ class PlayerFactory
                 .build()
         }
 
+        /**
+         * A continuous live stream (MPEG-TS) read through a ring file on disk, so it can be paused
+         * ([TimeshiftDataSource]). The file takes up to [TIMESHIFT_MAX_BYTES], or a quarter of the free
+         * space; null when the device has too little room.
+         */
+        @OptIn(UnstableApi::class)
+        fun timeshiftSource(item: MediaItem): MediaSource? {
+            val directory = context.cacheDir
+            val capacity = minOf(TIMESHIFT_MAX_BYTES, directory.usableSpace / 4)
+            if (capacity < TIMESHIFT_MIN_BYTES) return null
+            val source = TimeshiftDataSource.Factory(DefaultDataSource.Factory(context, http()), directory, capacity)
+            return ProgressiveMediaSource.Factory(source, DefaultExtractorsFactory()).createMediaSource(item)
+        }
+
+        @OptIn(UnstableApi::class)
+        private fun http(): DefaultHttpDataSource.Factory =
+            DefaultHttpDataSource
+                .Factory()
+                .setUserAgent(USER_AGENT)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(30_000)
+
         // Asked once (it calls the system): players are created on the main thread.
         private val lowRam by lazy { isLowRam() }
 
@@ -93,5 +113,9 @@ class PlayerFactory
             const val LIVE_MAX_BUFFER_MS = 30_000
             const val LIVE_START_BUFFER_MS = 1_000
             const val LIVE_REBUFFER_MS = 2_000
+
+            // Live pause: about 15 min of an 8 Mb/s stream at most; under 200 MB of room, no pause.
+            const val TIMESHIFT_MAX_BYTES = 1_000L * 1024 * 1024
+            const val TIMESHIFT_MIN_BYTES = 200L * 1024 * 1024
         }
     }

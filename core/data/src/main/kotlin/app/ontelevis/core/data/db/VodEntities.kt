@@ -106,6 +106,26 @@ data class WatchProgressEntity(
     val updatedAt: Long,
 )
 
+/** A started movie or episode, for "Continue watching". */
+data class InProgressRow(
+    val contentId: String,
+    /** Movie name, or the series name for an episode. */
+    val title: String,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    /** Null for a movie. */
+    val seriesId: String?,
+    val season: Int,
+    val episode: Int,
+    val episodeTitle: String?,
+    val positionMs: Long,
+    val durationMs: Long,
+    val updatedAt: Long,
+    val playlistId: Long,
+    /** Category of the movie or series (parental locks). */
+    val groupName: String,
+)
+
 /** Titles per category, counted once at the end of an import. */
 data class GroupCount(
     val name: String,
@@ -203,6 +223,41 @@ interface VodDao {
         playlistId: Long,
         group: String,
     ): Flow<List<MovieWithProgressRow>>
+
+    /** Started, unfinished (under 95 %) movies and episodes of enabled playlists, last watched first. */
+    @Query(
+        """
+        SELECT m.id AS contentId, m.name AS title, m.posterUrl AS posterUrl, NULL AS backdropUrl,
+            NULL AS seriesId, 0 AS season, 0 AS episode, NULL AS episodeTitle,
+            wp.positionMs AS positionMs, wp.durationMs AS durationMs, wp.updatedAt AS updatedAt,
+            m.playlistId AS playlistId, m.groupName AS groupName
+        FROM watch_progress wp JOIN movie m ON m.id = wp.contentId JOIN playlist p ON p.id = m.playlistId
+        WHERE p.enabled = 1 AND wp.positionMs > 0 AND wp.durationMs > 0 AND wp.positionMs < wp.durationMs * 0.95
+        UNION ALL
+        SELECT e.id, s.name, s.posterUrl, s.backdropUrl, s.id, e.season, e.episode, e.title,
+            wp.positionMs, wp.durationMs, wp.updatedAt, s.playlistId, s.groupName
+        FROM watch_progress wp JOIN episode e ON e.id = wp.contentId JOIN series s ON s.id = e.seriesId
+        JOIN playlist p ON p.id = s.playlistId
+        WHERE p.enabled = 1 AND wp.positionMs > 0 AND wp.durationMs > 0 AND wp.positionMs < wp.durationMs * 0.95
+        ORDER BY updatedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeInProgress(limit: Int): Flow<List<InProgressRow>>
+
+    /** Newest movies of enabled playlists (by the provider's "added" date). */
+    @Query(
+        "SELECT m.* FROM movie m JOIN playlist p ON p.id = m.playlistId " +
+            "WHERE p.enabled = 1 AND m.added > 0 ORDER BY m.added DESC LIMIT :limit",
+    )
+    fun observeRecentMovies(limit: Int): Flow<List<MovieEntity>>
+
+    /** Series of enabled playlists with the most recent changes (new episodes). */
+    @Query(
+        "SELECT s.* FROM series s JOIN playlist p ON p.id = s.playlistId " +
+            "WHERE p.enabled = 1 AND s.lastModified > 0 ORDER BY s.lastModified DESC LIMIT :limit",
+    )
+    fun observeRecentSeries(limit: Int): Flow<List<SeriesEntity>>
 
     @Query("SELECT * FROM series WHERE playlistId = :playlistId AND groupName = :group ORDER BY sortOrder")
     fun observeSeries(

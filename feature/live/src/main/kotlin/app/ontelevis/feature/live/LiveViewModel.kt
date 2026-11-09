@@ -7,9 +7,12 @@ import app.ontelevis.core.data.CategoryKind
 import app.ontelevis.core.data.CategoryRef
 import app.ontelevis.core.data.ChannelRepository
 import app.ontelevis.core.data.EpgRepository
+import app.ontelevis.core.data.LaunchRequest
+import app.ontelevis.core.data.LaunchRequests
 import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.PlaybackPrefs
 import app.ontelevis.core.data.PlaylistRepository
+import app.ontelevis.core.data.reminder.ReminderRepository
 import app.ontelevis.core.model.Channel
 import app.ontelevis.core.model.ChannelGroup
 import app.ontelevis.core.model.Playlist
@@ -29,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -36,6 +40,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -88,8 +93,15 @@ class LiveViewModel
         private val livePlayer: LivePlayer,
         private val prefs: PlaybackPrefs,
         private val parental: ParentalControl,
+        private val launchRequests: LaunchRequests,
+        private val reminderRepository: ReminderRepository,
     ) : ViewModel() {
         private val selectedKey = MutableStateFlow(prefs.lastGroup)
+
+        /** Programme starts with a reminder, by channel id (bell in the guide). */
+        val reminders: StateFlow<Map<String, Set<Long>>> =
+            reminderRepository.observe().stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
         private val showHidden = MutableStateFlow(false)
 
         private val lockedLive: Flow<Set<Pair<Long, String>>> = parental.locked.map { it.liveKeys() }
@@ -235,6 +247,13 @@ class LiveViewModel
                 }
             }
             resumeLastChannel()
+            // A channel opened from outside (reminder, Home, voice search): its category opens here.
+            viewModelScope.launch {
+                launchRequests.groupToOpen.filterNotNull().collect { key ->
+                    selectedKey.value = key
+                    launchRequests.groupOpened(key)
+                }
+            }
             // Remember every channel that plays (from here, CH+ / CH- or full screen) for the next start.
             viewModelScope.launch {
                 livePlayer.state
@@ -330,9 +349,17 @@ class LiveViewModel
             viewModelScope.launch { channelRepository.clearHistory() }
         }
 
+        /** Returns true when a reminder is now set for [programme]. */
+        suspend fun toggleReminder(
+            channel: Channel,
+            programme: Programme,
+        ): Boolean = reminderRepository.toggle(channel, programme)
+
         /** Startup: play the last channel in the preview and open its category. */
         private fun resumeLastChannel() {
             if (livePlayer.state.value.channel != null) return
+            // Started to play a given channel: that one, not the last one.
+            if (launchRequests.pending.value is LaunchRequest.PlayChannel) return
             val id = prefs.lastChannelId ?: return
             viewModelScope.launch {
                 val channel = channelRepository.channel(id) ?: return@launch
@@ -378,6 +405,13 @@ class PlayerViewModel
             livePlayer.state.value.channel
                 ?.let { livePlayer.play(it) }
         }
+
+        /** Live pause is on (Settings › Playback). */
+        val canPause: Boolean get() = livePlayer.canPause || livePlayer.state.value.paused
+
+        fun togglePause() = livePlayer.togglePause()
+
+        fun backToLive() = livePlayer.backToLive()
     }
 
 internal val ChannelGroup.key: Pair<Long, String> get() = playlistId to name

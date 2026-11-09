@@ -40,6 +40,7 @@ class PlaybackOptions
         private val vodPlayer: VodPlayer,
         private val prefs: PlaybackPrefRepository,
         val settings: PlayerSettings,
+        private val sessions: MediaSessions,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val live = PlayerSession()
@@ -52,10 +53,13 @@ class PlaybackOptions
             scope.launch {
                 livePlayer.state.map { it.channel?.id }.distinctUntilChanged().collect { id ->
                     live.bind(livePlayer.player, id)
+                    if (vodPlayer.state.value.contentId == null) sessions.use(livePlayer.player)
                 }
             }
+            scope.launch { settings.timeshift.collect { livePlayer.timeshiftEnabled = it } }
             scope.launch {
                 vodPlayer.state.map { it.contentId }.distinctUntilChanged().collect { id ->
+                    sessions.use(if (id != null) vodPlayer.player else livePlayer.player)
                     vod.bind(vodPlayer.player, id?.let { keyFor(it) })
                 }
             }

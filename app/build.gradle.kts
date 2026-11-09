@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:player"))
     implementation(project(":core:playerui"))
+    implementation(project(":feature:home"))
     implementation(project(":feature:live"))
     implementation(project(":feature:guide"))
     implementation(project(":feature:settings"))
@@ -58,6 +59,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
 

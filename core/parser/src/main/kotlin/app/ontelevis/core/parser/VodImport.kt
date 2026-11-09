@@ -30,6 +30,8 @@ data class ImportedSeries(
     val genre: String?,
     val year: Int?,
     val rating: Double,
+    /** Epoch seconds of the provider's last change to it (new episode), 0 when unknown. */
+    val lastModified: Long = 0,
 )
 
 data class ImportedEpisode(
@@ -107,6 +109,7 @@ object VodImport {
                 genre = s.genre,
                 year = yearOf(s.name, s.releaseDate),
                 rating = s.rating5,
+                lastModified = s.lastModified?.toDoubleOrNull()?.toLong() ?: 0,
             )
         }
     }

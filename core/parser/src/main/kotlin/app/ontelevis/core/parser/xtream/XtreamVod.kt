@@ -45,6 +45,8 @@ data class XtreamSeries(
     @SerialName("rating_5based") @Serializable(FlexibleDouble::class) val rating5: Double = 0.0,
     @SerialName("backdrop_path") @Serializable(FirstString::class) val backdrop: String? = null,
     @SerialName("category_id") @Serializable(FlexibleString::class) val categoryId: String? = null,
+    /** Epoch seconds of the last change (new episode): "recently added" series. */
+    @SerialName("last_modified") @Serializable(FlexibleString::class) val lastModified: String? = null,
 )
 
 /** `get_series_info`: seasons and episodes of one series. */

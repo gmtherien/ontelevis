@@ -2,4 +2,9 @@
 <resources>
     <string name="content_update">Mise à jour du contenu</string>
     <string name="content_update_started">Mise à jour de vos listes…</string>
+    <string name="reminder_now">« %1$s » commence à %2$s sur %3$s.</string>
+    <string name="reminder_watch">Regarder</string>
+    <string name="reminder_close">Fermer</string>
+    <string name="search_not_found">Rien trouvé pour « %1$s ».</string>
+    <string name="search_hint">Chaîne, film ou série</string>
 </resources>

@@ -33,6 +33,7 @@ internal fun PlaybackSettingsSection(settings: PlayerSettings) {
     val audio by settings.audioLanguage.collectAsStateWithLifecycle()
     val subtitles by settings.subtitleLanguage.collectAsStateWithLifecycle()
     val format by settings.format.collectAsStateWithLifecycle()
+    val timeshift by settings.timeshift.collectAsStateWithLifecycle()
     var choosing by remember { mutableStateOf<PlaybackChoice?>(null) }
     val automatic = stringResource(R.string.settings_playback_auto)
     val off = stringResource(R.string.settings_playback_subtitles_off)
@@ -64,6 +65,18 @@ internal fun PlaybackSettingsSection(settings: PlayerSettings) {
             selected = false,
             onClick = { choosing = PlaybackChoice.FORMAT },
             trailingTag = stringResource(format.label),
+        )
+        OntListItem(
+            text = stringResource(R.string.settings_playback_timeshift),
+            selected = false,
+            onClick = { settings.setTimeshift(!timeshift) },
+            trailingTag = stringResource(if (timeshift) R.string.settings_on else R.string.settings_off),
+        )
+        Text(
+            stringResource(R.string.settings_playback_timeshift_help),
+            style = OntTheme.type.meta,
+            color = OntTheme.colors.textMuted,
+            modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
         )
     }
     val close = { choosing = null }

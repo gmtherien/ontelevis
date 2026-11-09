@@ -1,6 +1,7 @@
 package app.ontelevis
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,7 +9,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import app.ontelevis.core.data.LanguageSettings
+import app.ontelevis.core.data.LaunchRequests
 import app.ontelevis.core.data.ParentalControl
+import app.ontelevis.core.data.WatchNextPublisher
+import app.ontelevis.core.data.reminder.ReminderCenter
+import app.ontelevis.core.data.reminder.ReminderRepository
 import app.ontelevis.core.data.sync.PlaylistSync
 import app.ontelevis.core.designsystem.component.LocalIsTv
 import app.ontelevis.core.designsystem.theme.OntelevisPhoneTheme
@@ -40,11 +45,27 @@ class MainActivity : ComponentActivity() {
     // Tracks and picture format remembered per channel / title, applied as each one starts.
     @Inject lateinit var playbackOptions: PlaybackOptions
 
+    @Inject lateinit var launchRequests: LaunchRequests
+
+    @Inject lateinit var reminderCenter: ReminderCenter
+
+    @Inject lateinit var reminders: ReminderRepository
+
+    @Inject lateinit var watchNext: WatchNextPublisher
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         playbackOptions.start()
+        // Google TV's "Continue watching" row follows the resume points.
+        watchNext.start()
+        // Started from a reminder, Google TV or a voice search (not when the activity is recreated).
+        if (savedInstanceState == null) LaunchRequests.parse(intent)?.let(launchRequests::post)
         // Off the main thread: WorkManager's first use opens its database.
-        lifecycleScope.launch(Dispatchers.IO) { PlaylistSync.schedule(applicationContext) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            PlaylistSync.schedule(applicationContext)
+            // Alarms are lost when the app is updated or force-stopped: set them again.
+            reminders.scheduleAll()
+        }
         val tv = isTelevision()
         if (!tv) enableEdgeToEdge()
         setContent {
@@ -58,12 +79,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        LaunchRequests.parse(intent)?.let(launchRequests::post)
+    }
+
     override fun onStart() {
         super.onStart()
+        reminderCenter.foreground = true
         livePlayer.resume()
     }
 
     override fun onStop() {
+        reminderCenter.foreground = false
         // A movie pauses (it does not reconnect on its own like a live stream).
         vodPlayer.pause()
         livePlayer.suspend()

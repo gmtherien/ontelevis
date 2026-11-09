@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.ontelevis.core.data.AppSettings
 import app.ontelevis.core.data.BackupFile
 import app.ontelevis.core.data.BackupFiles
 import app.ontelevis.core.data.BackupManager
@@ -55,6 +56,7 @@ class SettingsViewModel
         val backupFiles: BackupFiles,
         val updates: UpdateCenter,
         val player: PlayerSettings,
+        val app: AppSettings,
     ) : ViewModel() {
         /** A backup read and waiting for the user's confirmation. */
         data class PendingRestore(

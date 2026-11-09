@@ -74,7 +74,7 @@ fun PlayerScreen(
     val focus = remember { FocusRequester() }
     // Each change restarts the 3 s countdown of the info bar.
     var overlayTick by remember { mutableIntStateOf(1) }
-    val overlayVisible = overlayTick > 0
+    val overlayVisible = overlayTick > 0 || live.paused
     val channelId = live.channel?.id
 
     LaunchedEffect(channelId) { overlayTick = kotlin.math.abs(overlayTick) + 1 }
@@ -115,6 +115,19 @@ fun PlayerScreen(
                         viewModel.lastChannel()
                     }
 
+                    // Live pause (Settings › Playback): Play/Pause pauses and resumes behind live.
+                    Key.MediaPlayPause, Key.MediaPause, Key.MediaPlay, Key.Spacebar -> {
+                        if (!viewModel.canPause) return@onKeyEvent false
+                        viewModel.togglePause()
+                        showOverlay()
+                    }
+
+                    Key.MediaFastForward -> {
+                        if (live.behindMs == 0L && !live.paused) return@onKeyEvent false
+                        viewModel.backToLive()
+                        showOverlay()
+                    }
+
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                         when {
                             live.status == LiveState.Status.ERROR -> viewModel.retry()
@@ -130,7 +143,13 @@ fun PlayerScreen(
                         optionsOpen = true
                     }
 
-                    Key.DirectionLeft, Key.DirectionRight, Key.Info -> {
+                    // Behind live: Right goes back to live.
+                    Key.DirectionRight -> {
+                        if (live.behindMs > 0 && !live.paused) viewModel.backToLive()
+                        showOverlay()
+                    }
+
+                    Key.DirectionLeft, Key.Info -> {
                         showOverlay()
                     }
 
@@ -207,9 +226,23 @@ private fun InfoBar(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            LiveBadge(overVideo = true)
+            when {
+                live.paused -> OntTag(stringResource(R.string.live_paused))
+                live.behindMs > 0 -> OntTag(stringResource(R.string.live_behind, behindText(live.behindMs)))
+                else -> LiveBadge(overVideo = true)
+            }
             qualityLabel(channel, live.videoHeight)?.let { OntTag(it) }
-            Text(stringResource(R.string.live_zap_hint), style = OntTheme.type.meta, color = c.textTertiary)
+            Text(
+                stringResource(
+                    when {
+                        live.paused -> R.string.live_paused_hint
+                        live.behindMs > 0 -> R.string.live_behind_hint
+                        else -> R.string.live_zap_hint
+                    },
+                ),
+                style = OntTheme.type.meta,
+                color = c.textTertiary,
+            )
         }
         val now = Instant.now()
         val current = onNow(programmes, now)
@@ -232,4 +265,13 @@ private fun InfoBar(
             )
         }
     }
+}
+
+/** "12:34" behind live (or "1:02:03"). */
+private fun behindText(ms: Long): String {
+    val seconds = ms / 1000
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }

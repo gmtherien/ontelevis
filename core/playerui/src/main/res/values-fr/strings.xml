@@ -35,4 +35,7 @@
     <string name="stats_network">Réseau %1$s</string>
     <string name="stats_buffer">Tampon %1$s · images perdues %2$d</string>
     <string name="player_track_number">Piste %d</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_resume">Reprendre</string>
+    <string name="player_back_to_live">Retour au direct</string>
 </resources>

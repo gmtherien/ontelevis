@@ -78,6 +78,7 @@ fun SettingsScreen(
     val language by viewModel.language.collectAsStateWithLifecycle()
     val hasPin by viewModel.hasPin.collectAsStateWithLifecycle()
     val betas by viewModel.updates.betas.collectAsStateWithLifecycle()
+    val startOnHome by viewModel.app.startOnHome.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pinStep by remember { mutableStateOf(PinStep.NONE) }
     val pendingRestore by viewModel.pendingRestore.collectAsStateWithLifecycle()
@@ -300,6 +301,19 @@ fun SettingsScreen(
                 )
             }
             item { PlaybackSettingsSection(viewModel.player) }
+            item {
+                SectionLabel(
+                    stringResource(R.string.settings_start),
+                    Modifier.padding(start = 10.dp, top = 18.dp, bottom = 4.dp),
+                )
+            }
+            items(listOf(false, true)) { home ->
+                OntListItem(
+                    text = stringResource(if (home) R.string.settings_start_home else R.string.settings_start_tv),
+                    selected = home == startOnHome,
+                    onClick = { viewModel.app.setStartOnHome(home) },
+                )
+            }
             item {
                 SectionLabel(
                     stringResource(R.string.settings_app),

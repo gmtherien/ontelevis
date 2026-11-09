@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -14,6 +15,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import app.ontelevis.core.model.Channel
+import app.ontelevis.core.model.parseChannelName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,10 @@ data class LiveState(
     val error: PlaybackError? = null,
     /** Height of the decoded video, 0 when unknown. */
     val videoHeight: Int = 0,
+    /** Live pause: paused by the user. */
+    val paused: Boolean = false,
+    /** Live pause: how far behind live it plays (the time spent paused), 0 when live. */
+    val behindMs: Long = 0,
 ) {
     enum class Status { IDLE, BUFFERING, PLAYING, ERROR }
 }
@@ -51,6 +57,17 @@ class LivePlayer
         private var held = false
         private var zapList: List<Channel> = emptyList()
         private var previous: Channel? = null
+        private var pausedAt = 0L
+
+        /**
+         * Live pause (Settings): continuous streams go through a file on disk, so they can be paused and
+         * resumed behind live. Applies from the next channel opened.
+         */
+        var timeshiftEnabled: Boolean = false
+
+        /** True when Pause is possible now (live pause on and a channel playing). */
+        val canPause: Boolean
+            get() = timeshiftEnabled && _state.value.channel != null && _state.value.status != LiveState.Status.ERROR
 
         private val _state = MutableStateFlow(LiveState())
         val state: StateFlow<LiveState> = _state.asStateFlow()
@@ -73,6 +90,28 @@ class LivePlayer
             // find it there.
             ensurePlayer()
             _state.value = LiveState(channel = channel, status = LiveState.Status.BUFFERING)
+            open(channel)
+        }
+
+        /** Live pause: pauses, or resumes behind live (the stream kept downloading meanwhile). */
+        fun togglePause() {
+            val player = exo ?: return
+            if (_state.value.paused) {
+                player.playWhenReady = true
+                val pausedFor = SystemClock.elapsedRealtime() - pausedAt
+                _state.update { it.copy(paused = false, behindMs = it.behindMs + pausedFor) }
+            } else if (canPause) {
+                player.playWhenReady = false
+                pausedAt = SystemClock.elapsedRealtime()
+                _state.update { it.copy(paused = true) }
+            }
+        }
+
+        /** Live pause: back to what is on now (the channel reconnects). */
+        fun backToLive() {
+            val channel = _state.value.channel ?: return
+            policy.reset()
+            _state.update { it.copy(status = LiveState.Status.BUFFERING, error = null) }
             open(channel)
         }
 
@@ -124,14 +163,19 @@ class LivePlayer
             _state.value = LiveState()
         }
 
+        @OptIn(UnstableApi::class)
         private fun open(channel: Channel) {
             openedAt = SystemClock.elapsedRealtime()
+            // Each opening plays live (after a zap, a reconnection, "back to live").
+            _state.update { it.copy(paused = false, behindMs = 0) }
             handler.removeCallbacksAndMessages(null)
             val player = ensurePlayer()
             val item =
                 MediaItem
                     .Builder()
                     .setUri(channel.streamUrl)
+                    // "Now playing" on Android TV and the media session.
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(parseChannelName(channel.name).title).build())
                     .apply { if (asHls) setMimeType(MimeTypes.APPLICATION_M3U8) }
                     .build()
             // Release the video decoder before the next stream. Kept enabled, ExoPlayer reuses it and
@@ -139,7 +183,8 @@ class LivePlayer
             // then draw a 720p picture in the old 1080p buffers: small image in a corner, the previous
             // channel's last frame around it. A fresh decoder costs a few tens of ms per zap.
             player.stop()
-            player.setMediaItem(item)
+            val timeshift = if (timeshiftEnabled && !asHls) factory.timeshiftSource(item) else null
+            if (timeshift != null) player.setMediaSource(timeshift) else player.setMediaItem(item)
             player.prepare()
             player.playWhenReady = true
         }

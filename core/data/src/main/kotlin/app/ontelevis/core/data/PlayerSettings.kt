@@ -22,6 +22,15 @@ class PlayerSettings
         private val _subtitleLanguage = MutableStateFlow(prefs.getString(KEY_TEXT, null))
         private val _format = MutableStateFlow(formatOf(prefs.getString(KEY_FORMAT, null)))
         private val _showStats = MutableStateFlow(prefs.getBoolean(KEY_STATS, false))
+        private val _timeshift = MutableStateFlow(prefs.getBoolean(KEY_TIMESHIFT, false))
+
+        /** Live pause: streams go through a file on disk so Pause works (uses storage while watching). */
+        val timeshift: StateFlow<Boolean> = _timeshift.asStateFlow()
+
+        fun setTimeshift(value: Boolean) {
+            prefs.edit { putBoolean(KEY_TIMESHIFT, value) }
+            _timeshift.value = value
+        }
 
         /** Preferred audio language (ISO 639 code like "fr"), null for the stream's own default track. */
         val audioLanguage: StateFlow<String?> = _audioLanguage.asStateFlow()
@@ -75,5 +84,6 @@ class PlayerSettings
             const val KEY_TEXT = "subtitle_language"
             const val KEY_FORMAT = "format"
             const val KEY_STATS = "show_stats"
+            const val KEY_TIMESHIFT = "timeshift"
         }
     }

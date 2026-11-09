@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">Home</string>
+    <string name="home_continue">Continue watching</string>
+    <string name="home_channels">Favourite channels</string>
+    <string name="home_favorite_movies">Favourite movies</string>
+    <string name="home_favorite_series">Favourite series</string>
+    <string name="home_recent_movies">Recently added movies</string>
+    <string name="home_recent_series">Series with new episodes</string>
+    <string name="home_resume">Resume</string>
+    <string name="home_episode">S%1$d E%2$d</string>
+    <string name="home_empty">Your favourites, what you are watching and what is new will show here.</string>
+</resources>
