@@ -123,6 +123,8 @@ private class LiveActions(
     val setPin: (String) -> Unit,
     val unlock: (ChannelGroup) -> Unit,
     val setLocked: (ChannelGroup, Boolean) -> Unit,
+    /** The programme with its description (the guide grid has none). */
+    val describe: suspend (Channel, Programme) -> Programme = { _, p -> p },
 )
 
 /**
@@ -146,7 +148,9 @@ fun LiveScreen(
     val live by viewModel.live.collectAsStateWithLifecycle()
     val programmes by viewModel.programmes.collectAsStateWithLifecycle()
     val window by viewModel.window.collectAsStateWithLifecycle()
-    val now by viewModel.now.collectAsStateWithLifecycle()
+    // Read through a lambda: the minute tick reaches only what shows the time.
+    val nowState = viewModel.now.collectAsStateWithLifecycle()
+    val now = remember(nowState) { { nowState.value } }
     val playingProgrammes by viewModel.playingProgrammes.collectAsStateWithLifecycle()
     val actions =
         remember(viewModel, onAddPlaylist, onOpenFullscreen, onOpenCatchup) {
@@ -165,6 +169,7 @@ fun LiveScreen(
                 setPin = viewModel::setPin,
                 unlock = viewModel::unlock,
                 setLocked = viewModel::setLocked,
+                describe = viewModel::describe,
                 replay = { channel, programme ->
                     viewModel.lastReplay = channel.id to programme.startMillis
                     onOpenCatchup(channel.id, programme.startMillis, programme.stopMillis, programme.title)
@@ -175,7 +180,9 @@ fun LiveScreen(
         TvLive(
             state,
             channels,
-            GuideData(programmes.byChannel, window, now, playingProgrammes),
+            remember(programmes.byChannel, window, now, playingProgrammes) {
+                GuideData(programmes.byChannel, window, now, playingProgrammes)
+            },
             programmes.groupKey,
             live,
             viewModel.player,
@@ -215,7 +222,7 @@ fun LiveScreen(
                     setLocked = actions.setLocked,
                 )
             }
-        PhoneLive(state, channels.list, programmes.byChannel, now, phoneActions, modifier)
+        PhoneLive(state, channels.list, programmes.byChannel, nowState.value, phoneActions, modifier)
         phonePin?.let { group ->
             OntVerifyPinDialog(
                 title = groupLabel(group),
@@ -245,6 +252,9 @@ private fun groupLabel(group: ChannelGroup): String =
 /** A programme focused this close to the window start extends the guide into the past (catch-up). */
 private const val NEAR_WINDOW_START_MS = 2 * 60 * 60 * 1000L
 
+/** Pause before loading the focused programme's description. */
+private const val DESCRIPTION_DELAY_MS = 120L
+
 /** What to show instead of the channels, if anything. */
 private enum class LiveStatus { LOADING, NO_PLAYLIST, NOT_LOADED, FAILED, READY }
 
@@ -262,7 +272,7 @@ private val LiveUiState.status: LiveStatus
 private class GuideData(
     val programmes: Map<String, List<Programme>>,
     val window: EpgWindow,
-    val now: Instant,
+    val now: () -> Instant,
     /** Now and next of the channel in the player. */
     val playing: List<Programme>,
 )
@@ -353,6 +363,16 @@ private fun TvLive(
     // and the guide uses the whole width. A channel menu opened from the guide keeps the mode.
     var guideFocused by remember { mutableStateOf(false) }
     var guideFocus by remember { mutableStateOf<GuideFocus?>(null) }
+    // The info panel's description, loaded once the focus rests on a programme (short pause: moving
+    // quickly through the guide does not query each programme on the way).
+    LaunchedEffect(guideFocus) {
+        val focus = guideFocus ?: return@LaunchedEffect
+        val programme = focus.programme ?: return@LaunchedEffect
+        if (programme.description != null) return@LaunchedEffect
+        delay(DESCRIPTION_DELAY_MS)
+        val described = actions.describe(focus.channel, programme)
+        if (described.description != null && guideFocus === focus) guideFocus = GuideFocus(focus.channel, described)
+    }
     // Back from full screen opened from the guide: guide mode from the very first frame (no panel
     // showing then sliding away while the screen comes back).
     val guideMode = guideFocused || channelMenu != null || returnFocus == ReturnFocus.GUIDE
@@ -460,34 +480,39 @@ private fun TvLive(
     // Back from the guide: the categories come back (instead of jumping to the hidden rail).
     BackHandler(enabled = guideMode && moving == null) { scope.launch { focusCategory() } }
 
+    // Built once: a new instance on each recomposition (zap, player state, minute tick) made every guide
+    // row and block recompose. The lambdas read the current values when they run.
+    val latestWindow by rememberUpdatedState(guide.window)
     val guideActions =
-        GuideActions(
-            open = { channel ->
-                if (channel.id == live.channel?.id) {
-                    // Second OK on the channel in the player: full screen.
+        remember(actions) {
+            GuideActions(
+                open = { channel ->
+                    if (channel.id == latestLive.channel?.id) {
+                        // Second OK on the channel in the player: full screen.
+                        returnFocus = ReturnFocus.GUIDE
+                        actions.fullscreen()
+                    } else {
+                        actions.play(channel)
+                    }
+                },
+                leftEdge = { scope.launch { focusCategory() } },
+                menu = { channelMenu = it },
+                focused = { channel, programme ->
+                    guideFocus = GuideFocus(channel, programme)
+                    // Catch-up: nearing the start of the window, the guide reaches further into the past.
+                    if (programme != null &&
+                        channel.catchupDays > 0 &&
+                        programme.startMillis - latestWindow.start.toEpochMilli() < NEAR_WINDOW_START_MS
+                    ) {
+                        actions.extendIntoPast(channel)
+                    }
+                },
+                replay = { channel, programme ->
                     returnFocus = ReturnFocus.GUIDE
-                    actions.fullscreen()
-                } else {
-                    actions.play(channel)
-                }
-            },
-            leftEdge = { scope.launch { focusCategory() } },
-            menu = { channelMenu = it },
-            focused = { channel, programme ->
-                guideFocus = GuideFocus(channel, programme)
-                // Catch-up: nearing the start of the window, the guide reaches further into the past.
-                if (programme != null &&
-                    channel.catchupDays > 0 &&
-                    programme.startMillis - guide.window.start.toEpochMilli() < NEAR_WINDOW_START_MS
-                ) {
-                    actions.extendIntoPast(channel)
-                }
-            },
-            replay = { channel, programme ->
-                returnFocus = ReturnFocus.GUIDE
-                actions.replay(channel, programme)
-            },
-        )
+                    actions.replay(channel, programme)
+                },
+            )
+        }
 
     // The categories slide out of the screen in guide mode (translation only: their rows stay laid out,
     // so the focus can come back to them at once, and nothing is re-measured per animation frame).
@@ -523,7 +548,11 @@ private fun TvLive(
                 onToggleHidden = actions.toggleShowHidden,
                 // Right from a category: the channel in the player when its row is on screen (§6), else the
                 // current programme of the first visible row.
-                rightTarget = (if (playingRowVisible) playingRowFocus else guideEntry).takeIf { channels.isNotEmpty() },
+                // Read when Right is pressed, not in composition: the playing row scrolling in or out of
+                // view no longer recomposes every category row.
+                rightTarget = {
+                    (if (playingRowVisible) playingRowFocus else guideEntry).takeIf { channels.isNotEmpty() }
+                },
                 focusKey = panelFocusKey ?: state.selectedGroup?.entryKey,
                 focusRequester = panelFocus,
                 listState = categoryList,
@@ -564,7 +593,7 @@ private fun TvLive(
                         live = live,
                         player = player,
                         programmes = guide.playing,
-                        now = guide.now,
+                        now = guide.now(),
                         previewFocus = previewFocus,
                         onLeft = { scope.launch { focusCategory() } },
                         guideFocus = guideFocus.takeIf { guideMode },
@@ -794,7 +823,7 @@ private fun CategoryPanel(
     onMove: (step: Int) -> Unit,
     onEndMove: () -> Unit,
     onToggleHidden: () -> Unit,
-    rightTarget: FocusRequester?,
+    rightTarget: () -> FocusRequester?,
     focusKey: String?,
     focusRequester: FocusRequester,
     listState: LazyListState,
@@ -818,7 +847,7 @@ private fun CategoryPanel(
             items(entries, key = { it.key }) { entry ->
                 val focusModifier =
                     Modifier
-                        .focusProperties { if (rightTarget != null) right = rightTarget }
+                        .focusProperties { rightTarget()?.let { right = it } }
                         .then(if (entry.key == focusKey) Modifier.focusRequester(focusRequester) else Modifier)
                 when (entry) {
                     is PanelEntry.Label -> {
@@ -1020,7 +1049,7 @@ private fun PhoneLive(
                 }
                 LazyColumn {
                     items(channels, key = { it.id }) { channel ->
-                        val parsed = parseChannelName(channel.name)
+                        val parsed = remember(channel.name) { parseChannelName(channel.name) }
                         ListItem(
                             modifier =
                                 Modifier.combinedClickable(

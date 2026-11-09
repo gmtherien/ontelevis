@@ -12,6 +12,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.migration.AutoMigrationSpec
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "playlist")
@@ -56,6 +58,8 @@ data class ChannelGroupEntity(
     val name: String,
     val sortOrder: Int,
     val hidden: Boolean = false,
+    /** Channels in the group, counted at import (a COUNT per group re-ran on every write). */
+    @ColumnInfo(defaultValue = "0") val channelCount: Int = 0,
 )
 
 @Entity(
@@ -205,7 +209,7 @@ interface ChannelGroupDao {
     @Query(
         """
         SELECT g.playlistId AS playlistId, g.name AS name,
-            (SELECT COUNT(*) FROM channel c WHERE c.playlistId = g.playlistId AND c.groupName = g.name) AS channelCount,
+            g.channelCount AS channelCount,
             COALESCE(gp.hidden, 0) AS hidden
         FROM channel_group g JOIN playlist p ON p.id = g.playlistId
         LEFT JOIN group_pref gp ON gp.playlistId = g.playlistId AND gp.name = g.name
@@ -244,7 +248,7 @@ interface ChannelGroupDao {
         VodFavoriteEntity::class,
         CategoryLockEntity::class,
     ],
-    version = 8,
+    version = 9,
     // From version 3 on, schema changes keep the user's data (no more wipe).
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
@@ -253,6 +257,7 @@ interface ChannelGroupDao {
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9, spec = Migration8To9::class),
     ],
     exportSchema = true,
 )
@@ -268,4 +273,21 @@ abstract class OntelevisDatabase : RoomDatabase() {
     abstract fun vodDao(): VodDao
 
     abstract fun libraryDao(): LibraryDao
+}
+
+/** Version 9 stores category counts: fill them once from the existing rows. */
+class Migration8To9 : AutoMigrationSpec {
+    override fun onPostMigrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "UPDATE channel_group SET channelCount = (SELECT COUNT(*) FROM channel c " +
+                "WHERE c.playlistId = channel_group.playlistId AND c.groupName = channel_group.name)",
+        )
+        db.execSQL(
+            "UPDATE vod_category SET itemCount = CASE kind " +
+                "WHEN 'movie' THEN (SELECT COUNT(*) FROM movie m WHERE m.playlistId = vod_category.playlistId " +
+                "AND m.groupName = vod_category.name) " +
+                "ELSE (SELECT COUNT(*) FROM series s WHERE s.playlistId = vod_category.playlistId " +
+                "AND s.groupName = vod_category.name) END",
+        )
+    }
 }

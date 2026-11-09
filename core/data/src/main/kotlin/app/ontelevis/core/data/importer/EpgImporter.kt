@@ -43,7 +43,7 @@ class EpgImporter
             playlist: PlaylistEntity,
             now: Long = System.currentTimeMillis(),
         ): Int? =
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO + BackgroundPriority) {
                 val url = epgUrlOf(playlist) ?: return@withContext null
                 try {
                     val keys = channelDao.epgKeys(playlist.id).toHashSet()

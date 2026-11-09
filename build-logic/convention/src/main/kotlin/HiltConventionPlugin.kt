@@ -18,8 +18,15 @@ class HiltConventionPlugin : Plugin<Project> {
             // full one; the modules are small, so it costs little. Never taken from the build cache:
             // a forced rerun (--rerun-tasks) once stored an empty output there, and later builds
             // (even after clean) restored it and failed with Hilt MissingBinding errors.
-            val kspState = listOf(layout.buildDirectory.dir("kspCaches"), layout.buildDirectory.dir("generated/ksp"))
+            // Only this task's own variant is cleared ("kspDebugKotlin" -> debug): clearing the whole
+            // generated/ksp folder let a test KSP task wipe the code the app's KSP task had just made.
             tasks.matching { it.name.startsWith("ksp") && it.name.endsWith("Kotlin") }.configureEach {
+                val variant = name.removePrefix("ksp").removeSuffix("Kotlin").replaceFirstChar { it.lowercase() }
+                val kspState =
+                    listOf(
+                        layout.buildDirectory.dir("kspCaches/$variant"),
+                        layout.buildDirectory.dir("generated/ksp/$variant"),
+                    )
                 outputs.cacheIf { false }
                 doFirst { kspState.forEach { it.get().asFile.deleteRecursively() } }
             }

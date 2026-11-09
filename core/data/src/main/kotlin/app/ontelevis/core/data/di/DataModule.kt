@@ -2,6 +2,7 @@ package app.ontelevis.core.data.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import app.ontelevis.core.data.ChannelRepository
 import app.ontelevis.core.data.EpgRepository
 import app.ontelevis.core.data.PlaylistRepository
@@ -40,6 +41,9 @@ internal object DatabaseModule {
             // Versions 2 -> 3 and later migrate (see autoMigrations). Only the very first development
             // schema (version 1) is still wiped.
             .fallbackToDestructiveMigration(dropAllTables = true)
+            // WAL even on boxes that report low RAM (Room's AUTOMATIC mode falls back to TRUNCATE there,
+            // where an import blocks every read: categories, channels, guide).
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .build()
 
     @Provides

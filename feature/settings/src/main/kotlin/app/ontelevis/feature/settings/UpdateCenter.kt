@@ -72,9 +72,9 @@ class UpdateCenter
         fun startupCheck() {
             if (startupDone || !updater.canUpdate) return
             startupDone = true
-            updater.cleanUp()
             job =
                 scope.launch {
+                    updater.cleanUp()
                     val update = runCatching { updater.check() }.getOrNull()
                     if (update != null && _state.value == UpdateState.Idle) _state.value = UpdateState.Available(update)
                 }

@@ -89,7 +89,7 @@ class LiveViewModel
         private val prefs: PlaybackPrefs,
         private val parental: ParentalControl,
     ) : ViewModel() {
-        private val selectedKey = MutableStateFlow<Pair<Long, String>?>(null)
+        private val selectedKey = MutableStateFlow(prefs.lastGroup)
         private val showHidden = MutableStateFlow(false)
 
         private val lockedLive: Flow<Set<Pair<Long, String>>> = parental.locked.map { it.liveKeys() }
@@ -204,7 +204,12 @@ class LiveViewModel
                 .mapLatest { (channels, window) ->
                     GuideProgrammes(
                         channels.groupKey,
-                        epgRepository.programmes(channels.list, window.start.toEpochMilli(), window.end.toEpochMilli()),
+                        epgRepository.programmes(
+                            channels.list,
+                            window.start.toEpochMilli(),
+                            window.end.toEpochMilli(),
+                            withDescription = false,
+                        ),
                     )
                 }.stateIn(viewModelScope, SharingStarted.Eagerly, GuideProgrammes())
 
@@ -233,10 +238,13 @@ class LiveViewModel
             // Remember every channel that plays (from here, CH+ / CH- or full screen) for the next start.
             viewModelScope.launch {
                 livePlayer.state
-                    .map { it.channel?.id }
+                    .map { it.channel }
                     .filterNotNull()
-                    .distinctUntilChanged()
-                    .collect { prefs.lastChannelId = it }
+                    .distinctUntilChangedBy { it.id }
+                    .collect {
+                        prefs.lastChannelId = it.id
+                        prefs.lastGroup = it.playlistId to it.group
+                    }
             }
             // A channel of a category that locks again (the app went to the background) stops.
             viewModelScope.launch {
@@ -293,6 +301,12 @@ class LiveViewModel
         ) {
             viewModelScope.launch { channelRepository.setGroupHidden(group, hidden) }
         }
+
+        /** [programme] with its description (the guide grid loads programmes without them). */
+        suspend fun describe(
+            channel: Channel,
+            programme: Programme,
+        ): Programme = programme.copy(description = epgRepository.description(channel, programme.startMillis))
 
         fun checkPin(pin: String): Boolean = parental.checkPin(pin)
 

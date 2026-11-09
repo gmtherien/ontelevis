@@ -2,6 +2,7 @@ package app.ontelevis.core.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -26,6 +27,8 @@ data class VodCategoryEntity(
     val kind: String,
     val name: String,
     val sortOrder: Int,
+    /** Titles in the category, counted at import (a COUNT per category re-ran on every write). */
+    @ColumnInfo(defaultValue = "0") val itemCount: Int = 0,
 )
 
 @Entity(
@@ -101,6 +104,19 @@ data class WatchProgressEntity(
     val updatedAt: Long,
 )
 
+/** Titles per category, counted once at the end of an import. */
+data class GroupCount(
+    val name: String,
+    val count: Int,
+)
+
+/** A movie with its resume point (null when never played), for the posters grid. */
+data class MovieWithProgressRow(
+    @Embedded val movie: MovieEntity,
+    val positionMs: Long?,
+    val durationMs: Long?,
+)
+
 data class VodCategoryRow(
     val playlistId: Long,
     val kind: String,
@@ -128,6 +144,12 @@ interface VodDao {
         kind: String,
     )
 
+    @Query("SELECT groupName AS name, COUNT(*) AS count FROM movie WHERE playlistId = :playlistId GROUP BY groupName")
+    fun movieCounts(playlistId: Long): List<GroupCount>
+
+    @Query("SELECT groupName AS name, COUNT(*) AS count FROM series WHERE playlistId = :playlistId GROUP BY groupName")
+    fun seriesCounts(playlistId: Long): List<GroupCount>
+
     @Query("DELETE FROM movie WHERE playlistId = :playlistId")
     fun deleteMovies(playlistId: Long)
 
@@ -152,10 +174,7 @@ interface VodDao {
     @Query(
         """
         SELECT c.playlistId AS playlistId, c.kind AS kind, c.name AS name,
-            CASE c.kind
-                WHEN 'movie' THEN (SELECT COUNT(*) FROM movie m WHERE m.playlistId = c.playlistId AND m.groupName = c.name)
-                ELSE (SELECT COUNT(*) FROM series s WHERE s.playlistId = c.playlistId AND s.groupName = c.name)
-            END AS count
+            c.itemCount AS count
         FROM vod_category c JOIN playlist p ON p.id = c.playlistId
         WHERE p.enabled = 1 AND c.kind = :kind
         ORDER BY c.playlistId, c.sortOrder
@@ -168,6 +187,20 @@ interface VodDao {
         playlistId: Long,
         group: String,
     ): Flow<List<MovieEntity>>
+
+    /** One query for posters and progress bars (a separate IN (...) query was capped at 900 ids). */
+    @Query(
+        """
+        SELECT m.*, wp.positionMs AS positionMs, wp.durationMs AS durationMs
+        FROM movie m LEFT JOIN watch_progress wp ON wp.contentId = m.id
+        WHERE m.playlistId = :playlistId AND m.groupName = :group
+        ORDER BY m.sortOrder
+        """,
+    )
+    fun observeMoviesWithProgress(
+        playlistId: Long,
+        group: String,
+    ): Flow<List<MovieWithProgressRow>>
 
     @Query("SELECT * FROM series WHERE playlistId = :playlistId AND groupName = :group ORDER BY sortOrder")
     fun observeSeries(

@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -153,11 +154,14 @@ fun ProgressBar(
     modifier: Modifier = Modifier,
 ) {
     val c = OntTheme.colors
-    BoxWithConstraints(
-        modifier.fillMaxWidth().height(OntDimens.ProgressBar).background(c.background.copy(alpha = 0.6f)),
-    ) {
-        Box(Modifier.width(maxWidth * progress.coerceIn(0f, 1f)).fillMaxHeight().background(c.accent))
-    }
+    // Drawn, not laid out: no sub-layout per poster.
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(OntDimens.ProgressBar)
+            .background(c.background.copy(alpha = 0.6f))
+            .drawBehind { drawRect(c.accent, size = size.copy(width = size.width * progress.coerceIn(0f, 1f))) },
+    )
 }
 
 /** Secondary action next to [OntPrimaryButton]: dark at rest, light when focused. */

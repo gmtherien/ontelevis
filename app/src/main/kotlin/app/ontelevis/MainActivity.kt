@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.lifecycleScope
 import app.ontelevis.core.data.LanguageSettings
 import app.ontelevis.core.data.ParentalControl
 import app.ontelevis.core.data.sync.PlaylistSync
@@ -17,6 +18,8 @@ import app.ontelevis.core.player.VodPlayer
 import app.ontelevis.navigation.PhoneApp
 import app.ontelevis.navigation.TvApp
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -35,7 +38,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PlaylistSync.schedule(applicationContext)
+        // Off the main thread: WorkManager's first use opens its database.
+        lifecycleScope.launch(Dispatchers.IO) { PlaylistSync.schedule(applicationContext) }
         val tv = isTelevision()
         if (!tv) enableEdgeToEdge()
         setContent {

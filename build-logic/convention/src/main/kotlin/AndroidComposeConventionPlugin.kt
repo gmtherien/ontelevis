@@ -3,6 +3,8 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.ListProperty
 import org.gradle.kotlin.dsl.dependencies
 
 /** Adds Jetpack Compose to an Android application or library module. */
@@ -10,6 +12,16 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
+            // Models from :core:model are declared stable (compose_stability.conf at the repo root).
+            // Set through Gradle's own types: build-logic does not compile against the Compose plugin.
+            val composeCompiler = extensions.getByName("composeCompiler")
+
+            @Suppress("UNCHECKED_CAST")
+            val stabilityFiles =
+                composeCompiler.javaClass
+                    .getMethod("getStabilityConfigurationFiles")
+                    .invoke(composeCompiler) as ListProperty<RegularFile>
+            stabilityFiles.add(rootProject.layout.projectDirectory.file("compose_stability.conf"))
             pluginManager.withPlugin("com.android.application") {
                 extensions.getByType(ApplicationExtension::class.java).buildFeatures.compose = true
             }

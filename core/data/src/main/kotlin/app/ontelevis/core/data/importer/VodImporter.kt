@@ -142,20 +142,23 @@ internal class VodWriter(
         m3uSeries.clear()
         flushSeries()
         flushEpisodes()
-        dao.insertCategories(categories(VOD_MOVIE, movieGroups, movieOrder))
-        dao.insertCategories(categories(VOD_SERIES, seriesGroups, seriesOrder))
+        val movieCounts = dao.movieCounts(playlistId).associate { it.name to it.count }
+        val seriesCounts = dao.seriesCounts(playlistId).associate { it.name to it.count }
+        dao.insertCategories(categories(VOD_MOVIE, movieGroups, movieOrder, movieCounts))
+        dao.insertCategories(categories(VOD_SERIES, seriesGroups, seriesOrder, seriesCounts))
     }
 
     private fun categories(
         kind: String,
         used: Set<String>,
         order: List<String>,
+        counts: Map<String, Int>,
     ): List<VodCategoryEntity> {
         val rank = order.withIndex().associate { (index, name) -> name to index }
         val firstSeen = used.withIndex().associate { (index, name) -> name to index }
         return used
             .sortedWith(compareBy({ rank[it] ?: Int.MAX_VALUE }, { firstSeen[it] }))
-            .mapIndexed { index, name -> VodCategoryEntity(playlistId, kind, name, index) }
+            .mapIndexed { index, name -> VodCategoryEntity(playlistId, kind, name, index, counts[name] ?: 0) }
     }
 
     private fun flushMovies() {
@@ -223,7 +226,7 @@ class VodImporter
     ) {
         /** Movie and series counts, or null for a playlist without a VOD API (M3U). */
         suspend fun import(playlist: PlaylistEntity): Pair<Int, Int>? =
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO + BackgroundPriority) {
                 if (playlist.kind != PlaylistImporter.KIND_XTREAM) return@withContext null
                 guarded {
                     val urls = playlist.urls()

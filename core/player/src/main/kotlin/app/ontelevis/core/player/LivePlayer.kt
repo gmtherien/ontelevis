@@ -3,6 +3,7 @@ package app.ontelevis.core.player
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -121,9 +122,10 @@ class LivePlayer
         }
 
         private fun open(channel: Channel) {
+            openedAt = SystemClock.elapsedRealtime()
             handler.removeCallbacksAndMessages(null)
             val player =
-                exo ?: factory.create().also { created ->
+                exo ?: factory.create(live = true).also { created ->
                     created.addListener(listener)
                     exo = created
                 }
@@ -168,8 +170,23 @@ class LivePlayer
             }
         }
 
+        // Time the current channel was opened: "first frame after N ms" in logcat (tag OntelevisPlayer),
+        // to measure zapping speed.
+        private var openedAt = 0L
+
         private val listener =
             object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    Log.d(LOG_TAG, "first frame after ${SystemClock.elapsedRealtime() - openedAt} ms")
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying && openedAt > 0) {
+                        Log.d(LOG_TAG, "playing after ${SystemClock.elapsedRealtime() - openedAt} ms")
+                        openedAt = 0
+                    }
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
                         Player.STATE_READY -> {
@@ -234,3 +251,5 @@ private fun PlaybackException.isFormatAboveDevice(): Boolean =
     } == true
 
 private fun String.isHlsUrl(): Boolean = substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+
+private const val LOG_TAG = "OntelevisPlayer"

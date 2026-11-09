@@ -61,8 +61,8 @@ private fun NavDestination.railKey(): RailKey =
         else -> RailKey.SETTINGS
     }
 
-/** Navigation Compose's default crossfade, kept between ordinary screens. */
-private const val DEFAULT_FADE_MS = 700
+/** Fade between ordinary screens (Navigation's default 700 ms felt slow on TV). */
+private const val DEFAULT_FADE_MS = 200
 
 /** Screens where Back first goes up to the rail (the top of each rail destination). */
 private fun NavDestination.isRailTop(): Boolean =

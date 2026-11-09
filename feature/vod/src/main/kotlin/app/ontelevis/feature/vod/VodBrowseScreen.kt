@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -420,10 +421,14 @@ fun VodBrowseScreen(
                         modifier = Modifier.onFocusChanged { gridFocused = it.hasFocus },
                     ) {
                         itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+                            // Only this poster's flag changes when the grid scrolls (not every visible poster).
+                            val isFirstVisible by remember(index) {
+                                derivedStateOf { gridState.firstVisibleItemIndex == index }
+                            }
                             OntPosterCard(
                                 imageUrl = item.posterUrl,
                                 title = item.title,
-                                meta = itemMeta(item),
+                                meta = item.meta,
                                 progress = item.progress,
                                 favorite = item.id in state.favoriteIds,
                                 onLongClick = { menuItem = item },
@@ -442,13 +447,7 @@ fun VodBrowseScreen(
                                                 Modifier
                                             },
                                         ).then(
-                                            if (index ==
-                                                gridState.firstVisibleItemIndex
-                                            ) {
-                                                Modifier.focusRequester(gridEntry)
-                                            } else {
-                                                Modifier
-                                            },
+                                            if (isFirstVisible) Modifier.focusRequester(gridEntry) else Modifier,
                                         )
                                         // Left from the first column goes back to the selected category
                                         // (plain focus search picks whichever category is beside the poster).
@@ -620,12 +619,6 @@ private fun categoryLabel(category: VodCategory): String =
     } else {
         category.name.ifEmpty { stringResource(R.string.vod_uncategorized) }
     }
-
-private fun itemMeta(item: VodItem): String? =
-    listOfNotNull(
-        item.year?.toString(),
-        item.rating.takeIf { it > 0 }?.let { "★ " + String.format(Locale.ROOT, "%.1f", it) },
-    ).joinToString(" · ").ifEmpty { null }
 
 /** This playlist's movies and series were loaded at least once (empty then means "none"). */
 private val app.ontelevis.core.model.Playlist.vodLoaded: Boolean get() = lastVodAt != null

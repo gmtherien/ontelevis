@@ -1,5 +1,6 @@
 package app.ontelevis.feature.live
 
+import android.util.LruCache
 import androidx.annotation.OptIn
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.Channel
+import app.ontelevis.core.model.ParsedChannelName
 import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.LiveState
 import app.ontelevis.core.player.PlaybackError
@@ -59,12 +61,18 @@ internal fun LiveStatusOverlay(
     }
 }
 
+// The info panel asks on every focus move in the guide: the name's regexes run once per channel.
+private val parsedNames = LruCache<String, ParsedChannelName>(256)
+
+private fun parsedName(name: String): ParsedChannelName =
+    parsedNames.get(name) ?: parseChannelName(name).also { parsedNames.put(name, it) }
+
 /** Quality tag: from the provider name ("FHD", "4K"), else from the decoded video height. */
 internal fun qualityLabel(
     channel: Channel,
     videoHeight: Int,
 ): String? =
-    parseChannelName(channel.name).tags.firstOrNull() ?: when {
+    parsedName(channel.name).tags.firstOrNull() ?: when {
         videoHeight >= 2_160 -> "4K"
         videoHeight >= 1_080 -> "FHD"
         videoHeight >= 720 -> "HD"

@@ -68,7 +68,7 @@ class PlaylistImporter
         )
 
         suspend fun import(playlist: PlaylistEntity): Result =
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO + BackgroundPriority) {
                 try {
                     when (playlist.kind) {
                         KIND_XTREAM -> Result(importXtream(playlist), null)
@@ -143,10 +143,12 @@ class PlaylistImporter
                 groupDao.deleteForPlaylist(playlistId)
 
                 val groupOrder = LinkedHashMap<String, Int>()
+                val groupCounts = HashMap<String, Int>()
                 val batch = ArrayList<ChannelEntity>(BATCH_SIZE)
                 var count = 0
                 for (channel in channels) {
                     groupOrder.getOrPut(channel.group) { groupOrder.size }
+                    groupCounts[channel.group] = (groupCounts[channel.group] ?: 0) + 1
                     batch += channel.toEntity(playlistId, sortOrder = count++)
                     if (batch.size == BATCH_SIZE) {
                         channelDao.insertAll(batch)
@@ -161,8 +163,14 @@ class PlaylistImporter
                 val ordered = groupOrder.keys.sortedWith(compareBy({ rank[it] ?: Int.MAX_VALUE }, { groupOrder[it] }))
                 groupDao.insertAll(
                     ordered.mapIndexed { order, name ->
-                        previousGroups[name]?.copy(sortOrder = order)
-                            ?: ChannelGroupEntity(playlistId, name, sortOrder = order)
+                        previousGroups[name]?.copy(sortOrder = order, channelCount = groupCounts[name] ?: 0)
+                            ?: ChannelGroupEntity(
+                                playlistId,
+                                name,
+                                sortOrder = order,
+                                channelCount =
+                                    groupCounts[name] ?: 0,
+                            )
                     },
                 )
                 count

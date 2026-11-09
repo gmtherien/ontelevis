@@ -30,6 +30,9 @@ interface VodRepository {
 
     fun observeMovies(category: VodCategory): Flow<List<Movie>>
 
+    /** The category's movies with their resume points, in one query. */
+    fun observeMoviesWithProgress(category: VodCategory): Flow<List<Pair<Movie, WatchProgress?>>>
+
     /** Favourite movies or series, in the order they were added. */
     fun observeFavoriteMovies(): Flow<List<Movie>>
 
@@ -92,6 +95,19 @@ internal class RoomVodRepository
 
         override fun observeMovies(category: VodCategory): Flow<List<Movie>> =
             dao.observeMovies(category.playlistId, category.name).map { rows -> rows.map { it.toModel() } }
+
+        override fun observeMoviesWithProgress(category: VodCategory): Flow<List<Pair<Movie, WatchProgress?>>> =
+            dao.observeMoviesWithProgress(category.playlistId, category.name).map { rows ->
+                rows.map { row ->
+                    val progress =
+                        if (row.positionMs != null && row.durationMs != null) {
+                            WatchProgress(row.movie.id, row.positionMs, row.durationMs)
+                        } else {
+                            null
+                        }
+                    row.movie.toModel() to progress
+                }
+            }
 
         override fun observeSeries(category: VodCategory): Flow<List<Series>> =
             dao.observeSeries(category.playlistId, category.name).map { rows -> rows.map { it.toModel() } }

@@ -154,7 +154,8 @@ internal fun EpgGuide(
     channels: List<Channel>,
     programmes: Map<String, List<Programme>>,
     window: EpgWindow,
-    now: Instant,
+    /** Current time, read where needed: the minute tick does not recompose the whole guide. */
+    now: () -> Instant,
     playingId: String?,
     favoriteIds: Set<String>,
     groupName: String,
@@ -169,7 +170,6 @@ internal fun EpgGuide(
 ) {
     val c = OntTheme.colors
     val times = rememberTimeFormatter()
-    val firstVisible by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex } }
     BoxWithConstraints(
         modifier
             .fillMaxSize()
@@ -196,7 +196,7 @@ internal fun EpgGuide(
                                     SLOT_WIDTH *
                                     (Duration.between(window.start, before.first).toMillis().toFloat() / SLOT_MS)
                             } else {
-                                val at = replayTarget?.let { Instant.ofEpochMilli(it.second) } ?: now
+                                val at = replayTarget?.let { Instant.ofEpochMilli(it.second) } ?: now()
                                 total * window.fractionOf(at) - SLOT_WIDTH / 3
                             }.coerceIn(0.dp, (total - viewport).coerceAtLeast(0.dp))
                     }.also { previous[0] = window.start to it }
@@ -222,7 +222,7 @@ internal fun EpgGuide(
         val scope = rememberCoroutineScope()
         val vertical: (Int, Int, Long?) -> Boolean = { from, step, picked ->
             // The time chosen with Left / Right stays while moving up and down (null: the current time).
-            val at = anchor.time ?: picked ?: now.toEpochMilli()
+            val at = anchor.time ?: picked ?: now().toEpochMilli()
             val target = from + step
             if (target !in channels.indices) {
                 false
@@ -243,12 +243,22 @@ internal fun EpgGuide(
                             },
                         )
                     }
-                    repeat(5) {
+                    repeat(8) { attempt ->
                         withFrameNanos { }
-                        val requester = rows[target]?.at(at)
+                        val row = rows[target]
+                        val requester = row?.at(at)
                         anchor.movingVertically = true
                         if (requester != null && runCatching { requester.requestFocus() }.isSuccess) return@launch
                         anchor.movingVertically = false
+                        // Its block may be outside the composed part of the row: bring that time into view.
+                        if (attempt == 1) {
+                            row?.spanAt(at)?.let { (s, e) ->
+                                timeline.ensureVisible(
+                                    total * window.fractionOf(Instant.ofEpochMilli(s)),
+                                    total * window.fractionOf(Instant.ofEpochMilli(e)),
+                                )
+                            }
+                        }
                     }
                 }
                 true
@@ -259,6 +269,8 @@ internal fun EpgGuide(
             Box(Modifier.fillMaxWidth().height(OntDimens.Hairline).background(c.line))
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
+                    // Only this row's flag changes when the first visible row changes (not every row).
+                    val isEntryRow by remember(index) { derivedStateOf { listState.firstVisibleItemIndex == index } }
                     GuideRow(
                         channel = channel,
                         programmes = programmes[channel.id].orEmpty(),
@@ -272,11 +284,8 @@ internal fun EpgGuide(
                         scroll = scroll,
                         // Focus targets on the row's current programme: the channel in the player, and
                         // the first visible row (where the guide is entered from the categories).
-                        focusTargets =
-                            listOfNotNull(
-                                playingRowFocus.takeIf { channel.id == playingId },
-                                entry.takeIf { index == firstVisible },
-                            ),
+                        playingFocus = playingRowFocus.takeIf { channel.id == playingId },
+                        entryFocus = entry.takeIf { isEntryRow },
                         replayStart = replayTarget?.takeIf { it.first == channel.id }?.second,
                         replayFocus = replayFocus,
                         rowIndex = index,
@@ -314,7 +323,7 @@ private fun RowScope.TimelineTrack(
 private fun GuideHeader(
     count: Int,
     window: EpgWindow,
-    now: Instant,
+    now: () -> Instant,
     times: DateTimeFormatter,
     total: Dp,
     scroll: () -> Dp,
@@ -364,15 +373,21 @@ private fun GuideHeader(
                     Text(tick.atZone(zone).format(times), style = OntTheme.type.time, color = c.textTertiary)
                 }
             }
-            if (!now.isBefore(window.start) && now.isBefore(window.end)) {
+            val nowVisible by remember(window) {
+                derivedStateOf {
+                    val n = now()
+                    !n.isBefore(window.start) && n.isBefore(window.end)
+                }
+            }
+            if (nowVisible) {
                 Text(
-                    now.atZone(zone).format(times),
+                    now().atZone(zone).format(times),
                     style = OntTheme.type.time.copy(fontWeight = FontWeight.Bold),
                     color = c.onAccent,
                     modifier =
                         Modifier
                             .align(Alignment.CenterStart)
-                            .centeredAt(total * window.fractionOf(now))
+                            .centeredAt { total * window.fractionOf(now()) }
                             .zIndex(1f)
                             .background(c.accent, RoundedCornerShape(5.dp))
                             .padding(horizontal = 6.dp, vertical = 3.dp),
@@ -387,14 +402,15 @@ private fun GuideRow(
     channel: Channel,
     programmes: List<Programme>,
     window: EpgWindow,
-    now: Instant,
+    now: () -> Instant,
     playing: Boolean,
     favorite: Boolean,
     groupName: String,
     times: DateTimeFormatter,
     timeline: Timeline,
     scroll: () -> Dp,
-    focusTargets: List<FocusRequester>,
+    playingFocus: FocusRequester?,
+    entryFocus: FocusRequester?,
     /** Start of the programme replayed on this row, to focus it again on return. */
     replayStart: Long?,
     replayFocus: FocusRequester?,
@@ -411,8 +427,10 @@ private fun GuideRow(
     }
     val parsed = remember(channel.name) { parseChannelName(channel.name) }
     val meta =
-        listOfNotNull(parsed.group ?: groupName.ifEmpty { null }, parsed.tags.joinToString(" ").ifEmpty { null })
-            .joinToString(" · ")
+        remember(parsed, groupName) {
+            listOfNotNull(parsed.group ?: groupName.ifEmpty { null }, parsed.tags.joinToString(" ").ifEmpty { null })
+                .joinToString(" · ")
+        }
     val total = timeline.total
     Row(
         Modifier
@@ -480,13 +498,16 @@ private fun GuideRow(
                     subtitle = if (playing) "${stringResource(R.string.live_now_playing)} · $subtitle" else subtitle,
                     state = ProgramState.CURRENT,
                     playing = playing,
-                    progress = 0f,
+                    progress = NO_PROGRESS,
                     x = 0.dp,
                     blockWidth = total,
                     timeline = timeline,
                     scroll = scroll,
                     first = true,
-                    focusTargets = listOf(single) + focusTargets,
+                    ownFocus = single,
+                    playingFocus = playingFocus,
+                    entryFocus = entryFocus,
+                    replayFocus = null,
                     previous = null,
                     next = null,
                     onVertical = { step -> vertical(rowIndex, step, null) },
@@ -500,7 +521,6 @@ private fun GuideRow(
                     actions = actions,
                 )
             } else {
-                val zone = ZoneId.systemDefault()
                 // Left / Right move block by block in time order, Up / Down by time (RowFocus): plain
                 // geometric focus search jumped to odd blocks around very short programmes.
                 val blockFocus = remember(visible.size) { List(visible.size) { FocusRequester() } }
@@ -509,78 +529,79 @@ private fun GuideRow(
                     rows[rowIndex] = focus
                     onDispose { if (rows[rowIndex] === focus) rows.remove(rowIndex) }
                 }
-                val hasCurrent =
-                    visible.any { (p, _) ->
-                        programState(Instant.ofEpochMilli(p.startMillis), Instant.ofEpochMilli(p.stopMillis), now) ==
-                            ProgramState.CURRENT
+                // The programme on now: changes when a programme ends, not at every minute.
+                val currentIndex by remember(visible) {
+                    derivedStateOf {
+                        val n = now().toEpochMilli()
+                        visible.indexOfFirst { (p, _) -> n >= p.startMillis && n < p.stopMillis }
                     }
-                visible.forEachIndexed { index, (programme, span) ->
-                    key(programme.startMillis) {
-                        val start = Instant.ofEpochMilli(programme.startMillis)
-                        val end = Instant.ofEpochMilli(programme.stopMillis)
-                        val state = programState(start, end, now)
-                        val subtitle =
-                            if (state == ProgramState.CURRENT) {
-                                val left = minutesLeft(end, now).toInt()
-                                pluralStringResource(R.plurals.live_minutes_left, left, left)
-                            } else {
-                                "${start.atZone(zone).format(times)} – ${end.atZone(zone).format(times)}"
+                }
+                // Only the blocks near the view are composed (a catch-up window can hold days of
+                // programmes), plus each one's neighbours so Left / Right always reach the next block,
+                // plus the row's focus targets (programme on now, replayed programme).
+                val composed by remember(visible, timeline, total) {
+                    derivedStateOf {
+                        val lo = timeline.target - timeline.viewport
+                        val hi = timeline.target + timeline.viewport * 2
+                        val near =
+                            visible.indices.filter { i ->
+                                val (_, span) = visible[i]
+                                total * span.second > lo && total * span.first < hi
                             }
-                        // Catch-up: a past programme still inside the channel's archive can be replayed.
-                        val replayable =
-                            state == ProgramState.PAST &&
-                                channel.catchupDays > 0 &&
-                                !start.isBefore(now.minus(Duration.ofDays(channel.catchupDays.toLong())))
-                        // A row's focus target is its current programme (else its first block).
-                        val isTarget = state == ProgramState.CURRENT || (index == 0 && !hasCurrent)
-                        Block(
-                            title = programme.title,
-                            subtitle = subtitle,
-                            state = state,
-                            playing = playing && state == ProgramState.CURRENT,
-                            progress = if (state == ProgramState.CURRENT) progressOf(start, end, now) else 0f,
+                        buildSet {
+                            near.forEach { i -> addAll((i - 1)..(i + 1)) }
+                            add(currentIndex.takeIf { it >= 0 } ?: 0)
+                            if (replayStart !=
+                                null
+                            ) {
+                                add(visible.indexOfFirst { (p, _) -> p.startMillis == replayStart })
+                            }
+                        }
+                    }
+                }
+                visible.forEachIndexed { index, (programme, span) ->
+                    if (index !in composed) return@forEachIndexed
+                    key(programme.startMillis) {
+                        ProgrammeBlock(
+                            channel = channel,
+                            programme = programme,
+                            index = index,
+                            isLast = index == visible.lastIndex,
                             x = total * span.first,
                             blockWidth = total * (span.second - span.first),
+                            now = now,
+                            playing = playing,
+                            isRowTarget = index == currentIndex || (index == 0 && currentIndex < 0),
+                            times = times,
                             timeline = timeline,
                             scroll = scroll,
-                            first = index == 0,
-                            focusTargets =
-                                listOf(blockFocus[index]) +
-                                    (if (isTarget) focusTargets else emptyList()) +
-                                    listOfNotNull(replayFocus.takeIf { programme.startMillis == replayStart }),
+                            ownFocus = blockFocus[index],
+                            playingFocus = playingFocus,
+                            entryFocus = entryFocus,
+                            replayFocus = replayFocus.takeIf { programme.startMillis == replayStart },
                             previous = blockFocus.getOrNull(index - 1),
                             next = blockFocus.getOrNull(index + 1),
-                            // From the programme on now: the next channel's programme on now; else the
-                            // same time (from where this programme shows on screen).
                             onVertical = { step -> vertical(rowIndex, step, null) },
-                            replayable = replayable,
-                            onClick = { if (replayable) actions.replay(channel, programme) else actions.open(channel) },
-                            onLongClick = { actions.menu(channel) },
-                            onFocused = {
-                                // Chosen with Left / Right (or entering the guide): this programme's time
-                                // becomes the reference for Up / Down; the programme on now means "now".
-                                anchor.focused(
-                                    if (state ==
-                                        ProgramState.CURRENT
-                                    ) {
-                                        null
-                                    } else {
-                                        maxOf(programme.startMillis, viewStartMillis())
-                                    },
-                                )
-                                actions.focused(channel, programme)
-                            },
+                            viewStartMillis = viewStartMillis,
+                            anchor = anchor,
                             actions = actions,
                         )
                     }
                 }
             }
-            if (!now.isBefore(window.start) && now.isBefore(window.end)) {
-                // The now line sits above the rows but under the focused block (zIndex 1 vs 2).
+            val nowVisible by remember(window) {
+                derivedStateOf {
+                    val n = now()
+                    !n.isBefore(window.start) && n.isBefore(window.end)
+                }
+            }
+            if (nowVisible) {
+                // The now line sits above the rows but under the focused block (zIndex 1 vs 2). Placed
+                // during layout: the minute tick moves it without recomposing the row.
                 Box(
                     Modifier
                         .zIndex(1f)
-                        .centeredAt(total * window.fractionOf(now))
+                        .centeredAt { total * window.fractionOf(now()) }
                         .width(OntDimens.NowLine)
                         .fillMaxHeight()
                         .background(c.accent),
@@ -590,19 +611,105 @@ private fun GuideRow(
     }
 }
 
+/** One programme of a guide row. Its state, "N min left" and progress follow [now] on their own. */
+@Composable
+private fun ProgrammeBlock(
+    channel: Channel,
+    programme: Programme,
+    index: Int,
+    isLast: Boolean,
+    x: Dp,
+    blockWidth: Dp,
+    now: () -> Instant,
+    playing: Boolean,
+    isRowTarget: Boolean,
+    times: DateTimeFormatter,
+    timeline: Timeline,
+    scroll: () -> Dp,
+    ownFocus: FocusRequester,
+    playingFocus: FocusRequester?,
+    entryFocus: FocusRequester?,
+    replayFocus: FocusRequester?,
+    previous: FocusRequester?,
+    next: FocusRequester?,
+    onVertical: (Int) -> Boolean,
+    viewStartMillis: () -> Long,
+    anchor: TimeAnchor,
+    actions: GuideActions,
+) {
+    val start = remember(programme) { Instant.ofEpochMilli(programme.startMillis) }
+    val end = remember(programme) { Instant.ofEpochMilli(programme.stopMillis) }
+    val state by remember(programme) { derivedStateOf { programState(start, end, now()) } }
+    val minutes by remember(programme) { derivedStateOf { minutesLeft(end, now()).toInt() } }
+    // Catch-up: a past programme still inside the channel's archive can be replayed.
+    val replayable by remember(programme, channel.catchupDays) {
+        derivedStateOf {
+            val n = now()
+            !end.isAfter(n) &&
+                channel.catchupDays > 0 &&
+                !start.isBefore(n.minus(Duration.ofDays(channel.catchupDays.toLong())))
+        }
+    }
+    val subtitle =
+        if (state == ProgramState.CURRENT) {
+            pluralStringResource(R.plurals.live_minutes_left, minutes, minutes)
+        } else {
+            remember(programme, times) {
+                val zone = ZoneId.systemDefault()
+                "${start.atZone(zone).format(times)} – ${end.atZone(zone).format(times)}"
+            }
+        }
+    val progress = remember(programme) { { progressOf(start, end, now()) } }
+    Block(
+        title = programme.title,
+        subtitle = subtitle,
+        state = state,
+        playing = playing && state == ProgramState.CURRENT,
+        progress = progress,
+        x = x,
+        blockWidth = blockWidth,
+        timeline = timeline,
+        scroll = scroll,
+        first = index == 0,
+        ownFocus = ownFocus,
+        // A row's focus targets sit on its programme on now (else its first block).
+        playingFocus = playingFocus.takeIf { isRowTarget },
+        entryFocus = entryFocus.takeIf { isRowTarget },
+        replayFocus = replayFocus,
+        previous = previous,
+        next = next.takeIf { !isLast },
+        onVertical = onVertical,
+        replayable = replayable,
+        onClick = { if (replayable) actions.replay(channel, programme) else actions.open(channel) },
+        onLongClick = { actions.menu(channel) },
+        onFocused = {
+            // Chosen with Left / Right (or entering the guide): this programme's time becomes the
+            // reference for Up / Down; the programme on now means "now".
+            anchor.focused(
+                if (state == ProgramState.CURRENT) null else maxOf(programme.startMillis, viewStartMillis()),
+            )
+            actions.focused(channel, programme)
+        },
+        actions = actions,
+    )
+}
+
 @Composable
 private fun Block(
     title: String,
     subtitle: String,
     state: ProgramState,
     playing: Boolean,
-    progress: Float,
+    progress: () -> Float,
     x: Dp,
     blockWidth: Dp,
     timeline: Timeline,
     scroll: () -> Dp,
     first: Boolean,
-    focusTargets: List<FocusRequester>,
+    ownFocus: FocusRequester,
+    playingFocus: FocusRequester?,
+    entryFocus: FocusRequester?,
+    replayFocus: FocusRequester?,
     previous: FocusRequester?,
     next: FocusRequester?,
     /** Up (-1) / Down (+1): returns false to let the focus leave the guide (Up from the first row). */
@@ -653,7 +760,10 @@ private fun Block(
                         timeline.ensureVisible(start, end)
                         onFocused()
                     }
-                }.then(focusTargets.fold(Modifier as Modifier) { m, r -> m.focusRequester(r) })
+                }.focusRequester(ownFocus)
+                .then(if (playingFocus != null) Modifier.focusRequester(playingFocus) else Modifier)
+                .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
+                .then(if (replayFocus != null) Modifier.focusRequester(replayFocus) else Modifier)
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
@@ -714,13 +824,15 @@ private class RowFocus(
     val requesters: List<FocusRequester>,
 ) {
     /** The block airing at [time]; else the next one; else the last. */
-    fun at(time: Long): FocusRequester? {
-        val index =
-            spans.indexOfFirst { (start, stop) -> time in start until stop }.takeIf { it >= 0 }
-                ?: spans.indexOfFirst { (start, _) -> start >= time }.takeIf { it >= 0 }
-                ?: spans.lastIndex
-        return requesters.getOrNull(index)
-    }
+    fun at(time: Long): FocusRequester? = requesters.getOrNull(indexAt(time))
+
+    /** (start, stop) of the block [at] picks. */
+    fun spanAt(time: Long): Pair<Long, Long>? = spans.getOrNull(indexAt(time))
+
+    private fun indexAt(time: Long): Int =
+        spans.indexOfFirst { (start, stop) -> time in start until stop }.takeIf { it >= 0 }
+            ?: spans.indexOfFirst { (start, _) -> start >= time }.takeIf { it >= 0 }
+            ?: spans.lastIndex
 }
 
 /** Visible part of a programme in the window as (start, end) fractions, or null. */
@@ -733,13 +845,19 @@ private fun visibleSpan(
     }
 
 /** Places the element so that its horizontal centre is at [x]. */
-private fun Modifier.centeredAt(x: Dp): Modifier =
+private fun Modifier.centeredAt(x: Dp): Modifier = centeredAt { x }
+
+/** Centered on [x], read during layout (a moving value does not recompose). */
+private fun Modifier.centeredAt(x: () -> Dp): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         layout(placeable.width, placeable.height) {
-            placeable.place(x.roundToPx() - placeable.width / 2, 0)
+            placeable.place(x().roundToPx() - placeable.width / 2, 0)
         }
     }
+
+/** No progress bar (blocks without a programme). */
+private val NO_PROGRESS: () -> Float = { 0f }
 
 /** "14:30" or "2:30 PM", following the device's 12 / 24 h setting. */
 @Composable

@@ -31,8 +31,9 @@ class PlayerFactory
     constructor(
         @param:ApplicationContext private val context: Context,
     ) {
+        /** [live]: start after ~1 s of buffer (zapping), instead of the defaults' 2.5 s. */
         @OptIn(UnstableApi::class)
-        fun create(): ExoPlayer {
+        fun create(live: Boolean = false): ExoPlayer {
             val renderers =
                 DefaultRenderersFactory(context)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -48,8 +49,17 @@ class PlayerFactory
             val loadControl =
                 DefaultLoadControl
                     .Builder()
-                    .apply { if (isLowRam()) setTargetBufferBytes(LOW_RAM_BUFFER_BYTES) }
-                    .build()
+                    .apply {
+                        if (live) {
+                            setBufferDurationsMs(
+                                LIVE_MIN_BUFFER_MS,
+                                LIVE_MAX_BUFFER_MS,
+                                LIVE_START_BUFFER_MS,
+                                LIVE_REBUFFER_MS,
+                            )
+                        }
+                        if (lowRam) setTargetBufferBytes(LOW_RAM_BUFFER_BYTES)
+                    }.build()
             val audio =
                 AudioAttributes
                     .Builder()
@@ -64,6 +74,9 @@ class PlayerFactory
                 .build()
         }
 
+        // Asked once (it calls the system): players are created on the main thread.
+        private val lowRam by lazy { isLowRam() }
+
         private fun isLowRam(): Boolean {
             val manager = context.getSystemService(ActivityManager::class.java) ?: return false
             val memory = ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
@@ -74,5 +87,11 @@ class PlayerFactory
             const val USER_AGENT = "Ontelevis"
             const val LOW_RAM_TOTAL_BYTES = 2_500L * 1024 * 1024
             const val LOW_RAM_BUFFER_BYTES = 64 * 1024 * 1024
+
+            // Live: playback starts after 1 s of buffer (2 s after a stall); keeps 15-30 s ahead.
+            const val LIVE_MIN_BUFFER_MS = 15_000
+            const val LIVE_MAX_BUFFER_MS = 30_000
+            const val LIVE_START_BUFFER_MS = 1_000
+            const val LIVE_REBUFFER_MS = 2_000
         }
     }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -316,7 +317,8 @@ fun EpgProgramBlock(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     playing: Boolean = false,
-    progress: Float = 0f,
+    /** Read while drawing, so a new value redraws the bar without recomposing the block. */
+    progress: () -> Float = { 0f },
     onLongClick: (() -> Unit)? = null,
     /** A past programme that can be replayed (catch-up): rewind mark, brighter title. */
     replayable: Boolean = false,
@@ -417,10 +419,17 @@ fun EpgProgramBlock(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (state == ProgramState.CURRENT && progress > 0f && !focused) {
-                BoxWithConstraints(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(OntDimens.ProgressBar)) {
-                    Box(Modifier.width(maxWidth * progress.coerceIn(0f, 1f)).fillMaxHeight().background(c.accent))
-                }
+            if (state == ProgramState.CURRENT && !focused) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(OntDimens.ProgressBar)
+                        .drawBehind {
+                            val p = progress().coerceIn(0f, 1f)
+                            if (p > 0f) drawRect(c.accent, size = size.copy(width = size.width * p))
+                        },
+                )
             }
         }
     }

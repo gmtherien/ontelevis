@@ -84,27 +84,27 @@ class AppUpdater
             get() = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0
 
         /** The newest release worth offering, or null when up to date. Throws [UpdateException] (NETWORK). */
-        suspend fun check(): AvailableUpdate? {
-            if (!canUpdate) return null
-            val installed = AppVersion.parse(installedVersionName) ?: return null
-            val body =
-                withContext(Dispatchers.IO) {
-                    val request =
-                        Request
-                            .Builder()
-                            .url(RELEASES_URL)
-                            .header("Accept", "application/vnd.github+json")
-                            .header("User-Agent", "Ontelevis/$installedVersionName")
-                            .build()
+        suspend fun check(): AvailableUpdate? =
+            withContext(Dispatchers.IO) {
+                // All of it off the main thread: package info, network and JSON parsing.
+                if (!canUpdate) return@withContext null
+                val installed = AppVersion.parse(installedVersionName) ?: return@withContext null
+                val request =
+                    Request
+                        .Builder()
+                        .url(RELEASES_URL)
+                        .header("Accept", "application/vnd.github+json")
+                        .header("User-Agent", "Ontelevis/$installedVersionName")
+                        .build()
+                val body =
                     runCatching {
                         http.newCall(request).execute().use { response ->
                             if (!response.isSuccessful) throw UpdateException(UpdateError.NETWORK)
                             response.body.string()
                         }
                     }.getOrElse { throw UpdateException(UpdateError.NETWORK) }
-                }
-            return pickUpdate(body, installed, prefs.betas.value)
-        }
+                pickUpdate(body, installed, prefs.betas.value)
+            }
 
         /**
          * Downloads [update] and checks it is a newer Ontelevis signed with the same key as this one.
@@ -183,7 +183,9 @@ class AppUpdater
         }
 
         /** Downloads left by an earlier update are no longer needed. */
-        fun cleanUp() {
+        suspend fun cleanUp() = withContext(Dispatchers.IO) { cleanUpNow() }
+
+        private fun cleanUpNow() {
             File(context.cacheDir, UPDATE_DIR).listFiles()?.forEach { it.delete() }
         }
 

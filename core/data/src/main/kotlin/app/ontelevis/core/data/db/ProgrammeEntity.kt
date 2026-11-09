@@ -14,7 +14,8 @@ import androidx.room.Query
     foreignKeys = [
         ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE),
     ],
-    indices = [Index("playlistId", "channelKey", "start")],
+    // stop is in the index: the overlap test (stop > from) no longer reads each row from the table.
+    indices = [Index("playlistId", "channelKey", "start", "stop")],
 )
 data class ProgrammeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -26,6 +27,14 @@ data class ProgrammeEntity(
     val description: String?,
 )
 
+/** A programme as the guide grid draws it (no description). */
+data class ProgrammeSlot(
+    val channelKey: String,
+    val start: Long,
+    val stop: Long,
+    val title: String,
+)
+
 @Dao
 interface ProgrammeDao {
     @Insert
@@ -34,11 +43,15 @@ interface ProgrammeDao {
     @Query("DELETE FROM programme WHERE playlistId = :playlistId")
     fun deleteForPlaylist(playlistId: Long)
 
-    /** Programmes of [keys] that overlap [from, to). Keep [keys] under 500 per call (SQLite variables). */
+    /**
+     * Programmes of [keys] that overlap [from, to) and began after [earliestStart]. Keep [keys] under
+     * 500 per call (SQLite variables).
+     */
     @Query(
         """
         SELECT * FROM programme
-        WHERE playlistId = :playlistId AND channelKey IN (:keys) AND stop > :from AND start < :to
+        WHERE playlistId = :playlistId AND channelKey IN (:keys)
+            AND start >= :earliestStart AND start < :to AND stop > :from
         ORDER BY channelKey, start
         """,
     )
@@ -47,5 +60,32 @@ interface ProgrammeDao {
         keys: List<String>,
         from: Long,
         to: Long,
+        earliestStart: Long,
     ): List<ProgrammeEntity>
+
+    /** Same as [overlapping] without descriptions (the guide grid). */
+    @Query(
+        """
+        SELECT channelKey, start, stop, title FROM programme
+        WHERE playlistId = :playlistId AND channelKey IN (:keys)
+            AND start >= :earliestStart AND start < :to AND stop > :from
+        ORDER BY channelKey, start
+        """,
+    )
+    suspend fun overlappingSlots(
+        playlistId: Long,
+        keys: List<String>,
+        from: Long,
+        to: Long,
+        earliestStart: Long,
+    ): List<ProgrammeSlot>
+
+    @Query(
+        "SELECT description FROM programme WHERE playlistId = :playlistId AND channelKey = :key AND start = :start LIMIT 1",
+    )
+    suspend fun description(
+        playlistId: Long,
+        key: String,
+        start: Long,
+    ): String?
 }

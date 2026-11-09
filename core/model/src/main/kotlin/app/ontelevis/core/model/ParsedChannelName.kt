@@ -12,16 +12,15 @@ data class ParsedChannelName(
     val group: String? = null,
     val tags: List<String> = emptyList(),
 ) {
-    /** Up to two initials for the fallback logo tile. */
-    val initials: String
-        get() {
-            val words = title.split(WHITESPACE).filter { it.isNotEmpty() && it[0].isLetterOrDigit() }
-            return when {
-                words.isEmpty() -> "?"
-                words.size == 1 -> words[0].take(2).uppercase()
-                else -> "${words[0][0]}${words[1][0]}".uppercase()
-            }
+    /** Up to two initials for the fallback logo tile (computed once: guide rows ask for it often). */
+    val initials: String by lazy {
+        val words = title.split(WHITESPACE).filter { it.isNotEmpty() && it[0].isLetterOrDigit() }
+        when {
+            words.isEmpty() -> "?"
+            words.size == 1 -> words[0].take(2).uppercase()
+            else -> "${words[0][0]}${words[1][0]}".uppercase()
         }
+    }
 }
 
 private val WHITESPACE = Regex("\\s+")

@@ -5,12 +5,18 @@ import androidx.core.content.edit
 import app.ontelevis.core.data.db.CategoryLockEntity
 import app.ontelevis.core.data.db.LibraryDao
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.inject.Inject
@@ -51,13 +57,23 @@ class ParentalControl
         // Categories opened with the PIN since the app came to the foreground.
         private val unlocked = MutableStateFlow<Set<CategoryRef>>(emptySet())
 
+        // One database observer shared by every screen (each collector used to start its own). No
+        // initial value: a collector waits for the real locks (an empty set first would let the startup
+        // resume play a channel of a locked category).
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
         /** Every locked category, unlocked for this session or not. */
         val locked: Flow<Set<CategoryRef>> =
-            library.observeCategoryLocks().map { rows -> rows.mapNotNull { it.toRef() }.toSet() }
+            library
+                .observeCategoryLocks()
+                .map { rows -> rows.mapNotNull { it.toRef() }.toSet() }
+                .shareIn(scope, SharingStarted.Eagerly, replay = 1)
 
         /** Locked categories still closed now: their content stays out of lists, shortcuts and search. */
         val closed: Flow<Set<CategoryRef>> =
             combine(locked, unlocked, hasPin) { locked, open, pin -> if (pin) locked - open else emptySet() }
+                .distinctUntilChanged()
+                .shareIn(scope, SharingStarted.Eagerly, replay = 1)
 
         fun checkPin(pin: String): Boolean {
             val hash = prefs.getString(KEY_HASH, null) ?: return true

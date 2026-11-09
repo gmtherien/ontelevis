@@ -46,11 +46,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.CollationKey
 import java.text.Collator
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 import javax.inject.Inject
 import kotlin.random.Random
 
@@ -62,6 +64,8 @@ data class VodItem(
     val year: Int?,
     val rating: Double,
     val progress: Float?,
+    /** "2024 · ★ 3.5" under the poster, built once here (not at every recomposition of the grid). */
+    val meta: String? = null,
     /** Its provider category (parental locks apply to it in Favourites and search too). */
     val playlistId: Long = 0,
     val group: String = "",
@@ -263,13 +267,15 @@ class VodBrowseViewModel
         private fun sorted(
             list: List<VodItem>,
             sort: VodSort,
-        ): List<VodItem> =
-            when (sort) {
-                VodSort.PROVIDER -> {
-                    list
-                }
-
-                // Unknown years go last in both directions; same year: by title.
+        ): List<VodItem> {
+            if (sort == VodSort.PROVIDER || sort == VodSort.RANDOM || list.size < 2) return sortedPlain(list, sort)
+            // Title keys built once per item: a 14,000-movie category used to run two regexes and a full
+            // Collator comparison on each of ~200,000 comparisons.
+            val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
+            val keys = HashMap<String, CollationKey>(list.size * 2)
+            list.forEach { keys[it.id] = collator.getCollationKey(sortTitle(it.title)) }
+            val byTitle = Comparator<VodItem> { a, b -> keys.getValue(a.id).compareTo(keys.getValue(b.id)) }
+            return when (sort) {
                 VodSort.NEWEST -> {
                     list.sortedWith(
                         compareBy<VodItem> { it.year == null }.thenByDescending { it.year }.then(byTitle),
@@ -283,7 +289,9 @@ class VodBrowseViewModel
                 }
 
                 VodSort.TOP_RATED -> {
-                    list.sortedWith(compareBy<VodItem> { it.rating <= 0 }.thenByDescending { it.rating }.then(byTitle))
+                    list.sortedWith(
+                        compareBy<VodItem> { it.rating <= 0 }.thenByDescending { it.rating }.then(byTitle),
+                    )
                 }
 
                 VodSort.A_TO_Z -> {
@@ -294,16 +302,17 @@ class VodBrowseViewModel
                     list.sortedWith(byTitle.reversed())
                 }
 
-                VodSort.RANDOM -> {
-                    list.shuffled(Random(randomSeed))
+                else -> {
+                    list
                 }
             }
+        }
 
-        // Accents and case ignored; provider prefixes such as "4K: " or "EN - " do not count.
-        private val byTitle: Comparator<VodItem> =
-            Collator.getInstance().apply { strength = Collator.PRIMARY }.let { collator ->
-                compareBy(collator) { item: VodItem -> sortTitle(item.title) }
-            }
+        /** Orders that need no title comparison. */
+        private fun sortedPlain(
+            list: List<VodItem>,
+            sort: VodSort,
+        ): List<VodItem> = if (sort == VodSort.RANDOM) list.shuffled(Random(randomSeed)) else list
 
         fun setKind(value: VodKind) {
             if (kind.value != value) kind.value = value
@@ -334,9 +343,15 @@ class VodBrowseViewModel
 
         @OptIn(ExperimentalCoroutinesApi::class)
         private fun moviesWithProgress(category: VodCategory): Flow<List<VodItem>> =
-            (if (category.isFavorites) favoriteMovies else vod.observeMovies(category)).flatMapLatest { movies ->
-                vod.observeProgress(movies.map { it.id }).map { progress ->
-                    movies.map { it.toItem(progress[it.id]) }
+            if (category.isFavorites) {
+                favoriteMovies.flatMapLatest { movies ->
+                    vod.observeProgress(movies.map { it.id }).map { progress ->
+                        movies.map { it.toItem(progress[it.id]) }
+                    }
+                }
+            } else {
+                vod.observeMoviesWithProgress(category).map { rows ->
+                    rows.map { (movie, progress) -> movie.toItem(progress) }
                 }
             }
     }
@@ -356,9 +371,18 @@ private val PROVIDER_PREFIX = Regex("^(?:4K|8K|UHD|FHD|HD|SD|[A-Z]{2})\\s*[:|-]\
 internal fun sortTitle(title: String): String = title.replaceFirst(PROVIDER_PREFIX, "")
 
 private fun Movie.toItem(progress: WatchProgress?) =
-    VodItem(id, name, posterUrl, year, rating, progress?.fraction(), playlistId, group)
+    VodItem(id, name, posterUrl, year, rating, progress?.fraction(), metaOf(year, rating), playlistId, group)
 
-private fun Series.toItem() = VodItem(id, name, posterUrl, year, rating, null, playlistId, group)
+private fun Series.toItem() = VodItem(id, name, posterUrl, year, rating, null, metaOf(year, rating), playlistId, group)
+
+private fun metaOf(
+    year: Int?,
+    rating: Double,
+): String? =
+    listOfNotNull(
+        year?.toString(),
+        rating.takeIf { it > 0 }?.let { "★ " + String.format(Locale.ROOT, "%.1f", it) },
+    ).joinToString(" · ").ifEmpty { null }
 
 private fun VodKind.lockKind() = if (this == VodKind.MOVIE) CategoryKind.MOVIE else CategoryKind.SERIES
 

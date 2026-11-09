@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -81,8 +82,9 @@ fun VodPlayerScreen(
 
     LaunchedEffect(ui.missing) { if (ui.missing) onExit() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    LaunchedEffect(Unit) {
-        while (true) {
+    // Position read only while the controls show it: hidden, the screen does not recompose twice a second.
+    LaunchedEffect(overlayVisible) {
+        while (overlayVisible) {
             position = viewModel.positionMs
             duration = viewModel.durationMs
             delay(500)
@@ -260,16 +262,15 @@ private fun Overlay(
                 ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            BoxWithConstraints(
+            val fraction = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+            Box(
                 Modifier
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(c.lineStrong),
-            ) {
-                val fraction = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-                Box(Modifier.width(maxWidth * fraction).fillMaxHeight().background(c.accent))
-            }
+                    .background(c.lineStrong)
+                    .drawBehind { drawRect(c.accent, size = size.copy(width = size.width * fraction)) },
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${clock(position)} / ${if (duration > 0) clock(duration) else "--:--"}",
