@@ -9,9 +9,53 @@ No ads, no tracking, no subscription.
 *Lecteur IPTV libre et gratuit pour Android TV, Google TV, Fire TV et téléphones Android.
 Aucun contenu n'est fourni : vous ajoutez votre propre liste de lecture.*
 
+## Install
+
+Ontelevis is not on the Play Store or the Amazon Appstore yet: you install the APK yourself.
+On a TV, the easiest way is the free **Downloader** app by AFTVnews.
+
+1. Install **Downloader** (by AFTVnews) from the Play Store (Android TV / Google TV) or the
+   Amazon Appstore (Fire TV).
+2. Allow Downloader to install apps:
+   - Fire TV: Settings › My Fire TV › Developer options › Install unknown apps › Downloader: On.
+   - Android TV / Google TV: Settings › Apps › Security & restrictions › Unknown sources ›
+     Downloader: On (on some models: Settings › Privacy › Security › Install unknown apps).
+3. Open Downloader, type the code **`6258556`** in the address box and press Go
+   (or enter `aftv.news/6258556`).
+4. When the download ends, choose **Install**, then **Open**.
+
+Other ways:
+
+- Direct link to the newest stable APK (phones, browsers, any other downloader app):
+  `https://github.com/gmtherien/ontelevis/releases/latest/download/ontelevis.apk`
+- All versions, including betas: the [Releases](https://github.com/gmtherien/ontelevis/releases) page.
+
+Once installed, Ontelevis checks for updates by itself at each start, so you only do this once.
+
+**"Unknown developer" or "unsafe app" warning:** Google Play Protect shows it for apps installed
+outside the Play Store whose developer is not yet registered with Google. It is not a sign of a
+problem in the app; choose **Install anyway** (sometimes under **More details**). Every release is
+built from this repository by GitHub Actions and signed with the same key (certificate SHA-256
+`8e33258116c731a880b83980da857e9fa5e9994cce40b02c3f4066599140449b`).
+
+### Installation (français)
+
+1. Installez **Downloader** (par AFTVnews) depuis le Play Store (Android TV / Google TV) ou
+   l'Amazon Appstore (Fire TV).
+2. Autorisez Downloader à installer des applications (Fire TV : Paramètres › Ma Fire TV ›
+   Options pour les développeurs › Installer des applications inconnues ; Android TV / Google TV :
+   Paramètres › Applications › Sécurité et restrictions › Sources inconnues).
+3. Dans Downloader, tapez le code **`6258556`** (ou `aftv.news/6258556`), puis Go.
+4. À la fin du téléchargement, choisissez **Installer**, puis **Ouvrir**.
+
+Lien direct vers le dernier APK stable :
+`https://github.com/gmtherien/ontelevis/releases/latest/download/ontelevis.apk`.
+Si la télé avertit que le développeur est inconnu, c'est Play Protect qui réagit à une app installée
+hors du Play Store : choisissez **Installer quand même**.
+
 ## Status
 
-Early development, V1 features in place: M3U and Xtream playlists, XMLTV grid guide, movies and
+Version 1.0.0, with: M3U and Xtream playlists, XMLTV grid guide, movies and
 series (search, sort, resume), favourites and history, category order / hide / lock, channel
 zapping, Xtream catch-up, parental PIN, backup and restore, English and French.
 
