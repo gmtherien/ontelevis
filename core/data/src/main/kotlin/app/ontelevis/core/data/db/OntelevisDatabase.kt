@@ -175,6 +175,9 @@ interface ChannelDao {
     @Query("DELETE FROM channel WHERE playlistId = :playlistId")
     fun deleteForPlaylist(playlistId: Long)
 
+    @Query("SELECT groupName AS name, COUNT(*) AS count FROM channel WHERE playlistId = :playlistId GROUP BY groupName")
+    fun groupCounts(playlistId: Long): List<GroupCount>
+
     @Query("SELECT * FROM channel WHERE id = :id")
     suspend fun get(id: String): ChannelEntity?
 

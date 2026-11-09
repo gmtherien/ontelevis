@@ -143,12 +143,10 @@ class PlaylistImporter
                 groupDao.deleteForPlaylist(playlistId)
 
                 val groupOrder = LinkedHashMap<String, Int>()
-                val groupCounts = HashMap<String, Int>()
                 val batch = ArrayList<ChannelEntity>(BATCH_SIZE)
                 var count = 0
                 for (channel in channels) {
                     groupOrder.getOrPut(channel.group) { groupOrder.size }
-                    groupCounts[channel.group] = (groupCounts[channel.group] ?: 0) + 1
                     batch += channel.toEntity(playlistId, sortOrder = count++)
                     if (batch.size == BATCH_SIZE) {
                         channelDao.insertAll(batch)
@@ -159,6 +157,8 @@ class PlaylistImporter
                 // Throwing here rolls the transaction back: the old channels stay.
                 if (count == 0 && !hasOtherContent()) throw RefreshException(RefreshError.EMPTY)
 
+                // Counted from the table: a channel id listed twice replaces the first copy.
+                val groupCounts = channelDao.groupCounts(playlistId).associate { it.name to it.count }
                 val rank = providerGroupOrder.withIndex().associate { (index, name) -> name to index }
                 val ordered = groupOrder.keys.sortedWith(compareBy({ rank[it] ?: Int.MAX_VALUE }, { groupOrder[it] }))
                 groupDao.insertAll(
