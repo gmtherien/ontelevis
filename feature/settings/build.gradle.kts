@@ -7,5 +7,6 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:playerui"))
     implementation(libs.androidx.activity.compose)
 }

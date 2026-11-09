@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_options">Options</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Sous-titres</string>
+    <string name="player_format">Format d’image</string>
+    <string name="player_stats">Infos du flux</string>
+    <string name="player_sleep">Minuterie de mise en veille</string>
+    <string name="player_auto">Automatique</string>
+    <string name="player_subtitles_off">Désactivés</string>
+    <string name="player_no_tracks">Aucune autre piste dans ce flux</string>
+    <string name="player_shown">Affichées</string>
+    <string name="player_hidden">Masquées</string>
+    <string name="player_option_value">%1$s : %2$s</string>
+    <string name="format_fit">Ajuster</string>
+    <string name="format_fill">Remplir (étirer)</string>
+    <string name="format_zoom">Zoom</string>
+    <string name="sleep_off">Désactivée</string>
+    <plurals name="sleep_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="many">%d minutes</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="sleep_left">
+        <item quantity="one">%d min restante</item>
+        <item quantity="many">%d min restantes</item>
+        <item quantity="other">%d min restantes</item>
+    </plurals>
+    <string name="sleep_prompt">Toujours là ? La lecture s’arrête dans %1$d s.</string>
+    <string name="sleep_continue">Continuer à regarder</string>
+    <string name="sleep_stopped">Minuterie : lecture arrêtée.</string>
+    <string name="stats_video">Vidéo %1$s</string>
+    <string name="stats_audio">Audio %1$s</string>
+    <string name="stats_bitrate">Débit vidéo %1$s</string>
+    <string name="stats_network">Réseau %1$s</string>
+    <string name="stats_buffer">Tampon %1$s · images perdues %2$d</string>
+    <string name="player_track_number">Piste %d</string>
+</resources>

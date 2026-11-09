@@ -103,4 +103,12 @@
         <item quantity="one">Your “%1$s” subscription expires in %2$d day.</item>
         <item quantity="other">Your “%1$s” subscription expires in %2$d days.</item>
     </plurals>
+    <!-- Playback -->
+    <string name="settings_playback">Playback</string>
+    <string name="settings_playback_help">Starting choices for every channel and title. In the player, OK on the info bar (or Menu) changes them for that channel or series only.</string>
+    <string name="settings_playback_audio">Audio language</string>
+    <string name="settings_playback_subtitles">Subtitles</string>
+    <string name="settings_playback_format">Picture format</string>
+    <string name="settings_playback_auto">Stream default</string>
+    <string name="settings_playback_subtitles_off">Off</string>
 </resources>

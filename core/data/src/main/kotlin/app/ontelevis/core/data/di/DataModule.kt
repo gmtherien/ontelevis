@@ -15,8 +15,10 @@ import app.ontelevis.core.data.db.ChannelDao
 import app.ontelevis.core.data.db.ChannelGroupDao
 import app.ontelevis.core.data.db.LibraryDao
 import app.ontelevis.core.data.db.OntelevisDatabase
+import app.ontelevis.core.data.db.PlaybackPrefDao
 import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.ProgrammeDao
+import app.ontelevis.core.data.db.ReminderDao
 import app.ontelevis.core.data.db.VodDao
 import dagger.Binds
 import dagger.Module
@@ -63,6 +65,12 @@ internal object DatabaseModule {
 
     @Provides
     fun libraryDao(database: OntelevisDatabase): LibraryDao = database.libraryDao()
+
+    @Provides
+    fun playbackPrefDao(database: OntelevisDatabase): PlaybackPrefDao = database.playbackPrefDao()
+
+    @Provides
+    fun reminderDao(database: OntelevisDatabase): ReminderDao = database.reminderDao()
 }
 
 @Module

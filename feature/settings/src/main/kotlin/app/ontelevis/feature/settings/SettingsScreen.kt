@@ -299,6 +299,7 @@ fun SettingsScreen(
                     onClick = { if (hasPin) restorePinCheck = true else startRestore() },
                 )
             }
+            item { PlaybackSettingsSection(viewModel.player) }
             item {
                 SectionLabel(
                     stringResource(R.string.settings_app),

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_options">Options</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Subtitles</string>
+    <string name="player_format">Picture format</string>
+    <string name="player_stats">Stream info</string>
+    <string name="player_sleep">Sleep timer</string>
+    <string name="player_auto">Automatic</string>
+    <string name="player_subtitles_off">Off</string>
+    <string name="player_no_tracks">No other track in this stream</string>
+    <string name="player_shown">Shown</string>
+    <string name="player_hidden">Hidden</string>
+    <string name="player_option_value">%1$s: %2$s</string>
+    <string name="format_fit">Fit</string>
+    <string name="format_fill">Fill (stretch)</string>
+    <string name="format_zoom">Zoom</string>
+    <string name="sleep_off">Off</string>
+    <plurals name="sleep_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="sleep_left">
+        <item quantity="one">%d min left</item>
+        <item quantity="other">%d min left</item>
+    </plurals>
+    <string name="sleep_prompt">Still watching? Playback stops in %1$d s.</string>
+    <string name="sleep_continue">Keep watching</string>
+    <string name="sleep_stopped">Sleep timer: playback stopped.</string>
+    <string name="stats_video">Video %1$s</string>
+    <string name="stats_audio">Audio %1$s</string>
+    <string name="stats_bitrate">Video bitrate %1$s</string>
+    <string name="stats_network">Network %1$s</string>
+    <string name="stats_buffer">Buffer %1$s · dropped frames %2$d</string>
+    <string name="player_track_number">Track %d</string>
+</resources>

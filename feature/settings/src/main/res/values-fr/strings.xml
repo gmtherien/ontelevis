@@ -109,4 +109,12 @@
         <item quantity="many">Votre abonnement « %1$s » expire dans %2$d jours.</item>
         <item quantity="other">Votre abonnement « %1$s » expire dans %2$d jours.</item>
     </plurals>
+    <!-- Lecture -->
+    <string name="settings_playback">Lecture</string>
+    <string name="settings_playback_help">Choix de départ pour chaque chaîne et titre. Dans le lecteur, OK sur la barre d’info (ou Menu) les change pour cette chaîne ou cette série seulement.</string>
+    <string name="settings_playback_audio">Langue audio</string>
+    <string name="settings_playback_subtitles">Sous-titres</string>
+    <string name="settings_playback_format">Format d’image</string>
+    <string name="settings_playback_auto">Celle du flux</string>
+    <string name="settings_playback_subtitles_off">Désactivés</string>
 </resources>

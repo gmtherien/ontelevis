@@ -1,22 +1,20 @@
 package app.ontelevis.feature.live
 
 import android.util.LruCache
-import androidx.annotation.OptIn
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.compose.ContentFrame
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.Channel
@@ -24,19 +22,19 @@ import app.ontelevis.core.model.ParsedChannelName
 import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.LiveState
 import app.ontelevis.core.player.PlaybackError
+import app.ontelevis.core.playerui.PlayerOptionsViewModel
+import app.ontelevis.core.playerui.PlayerVideo
 
-/** The video of the live player, letterboxed. Shows nothing until something was played. */
-@OptIn(UnstableApi::class)
+/** The video of the live player in the channel's picture format, with subtitles. Black until something plays. */
 @Composable
 internal fun LiveVideo(
     player: Player?,
     modifier: Modifier = Modifier,
+    options: PlayerOptionsViewModel = hiltViewModel(),
 ) {
-    Box(modifier.background(androidx.compose.ui.graphics.Color.Black)) {
-        if (player != null) {
-            ContentFrame(player = player, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-        }
-    }
+    val format by options.options.live.format
+        .collectAsStateWithLifecycle()
+    PlayerVideo(player, format, modifier)
 }
 
 /** "Connecting…" or the error, centred over the video. Nothing while it plays. */

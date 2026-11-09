@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import app.ontelevis.core.playerui.SleepTimerHost
 import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AccountWarning
@@ -88,6 +89,8 @@ fun PhoneApp() {
     }
     // Subscription about to expire: once a day, as a short message.
     AccountWarning()
+    // Sleep timer ran out: "Still watching?", then playback stops and the app leaves the players.
+    SleepTimerHost(onStopped = { navController.goTo(LiveRoute) })
     // New version on GitHub: asked at each start, never over a full-screen player.
     UpdatePrompt(
         allowed =

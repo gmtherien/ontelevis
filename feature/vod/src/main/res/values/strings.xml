@@ -19,8 +19,8 @@
     <string name="vod_loading_episodes">Loading episodes…</string>
     <string name="vod_no_episodes">No episodes found for this series.</string>
     <string name="vod_loading">Loading…</string>
-    <string name="vod_hint_playing">◀ ▶ 10 s · OK pause</string>
-    <string name="vod_hint_paused">Paused · OK resume</string>
+    <string name="vod_hint_playing">◀ ▶ 10 s · OK pause · ▼ options</string>
+    <string name="vod_hint_paused">Paused · OK resume · ▼ options</string>
     <string name="vod_error_catchup_missing">The provider has no recording of this programme (its archive may have a gap at that time).</string>
     <string name="vod_error_not_found">This title is no longer available on the server.</string>
     <string name="vod_error_unsupported">This file format cannot be played.</string>

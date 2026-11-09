@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,7 +42,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,13 +49,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.compose.ContentFrame
 import androidx.tv.material3.Text
 import app.ontelevis.core.designsystem.theme.OntDimens
 import app.ontelevis.core.designsystem.theme.OntMotion
 import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.player.PlaybackError
 import app.ontelevis.core.player.VodState
+import app.ontelevis.core.playerui.PlayerOptionsMenu
+import app.ontelevis.core.playerui.PlayerOptionsViewModel
+import app.ontelevis.core.playerui.PlayerVideo
+import app.ontelevis.core.playerui.StatsOverlay
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -70,8 +73,14 @@ fun VodPlayerScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: VodPlayerViewModel = hiltViewModel(),
+    options: PlayerOptionsViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val format by options.options.vod.format
+        .collectAsStateWithLifecycle()
+    val showStats by options.options.settings.showStats
+        .collectAsStateWithLifecycle()
+    var optionsOpen by remember { mutableStateOf(false) }
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val focus = remember { FocusRequester() }
     var overlayTick by remember { mutableIntStateOf(1) }
@@ -138,7 +147,14 @@ fun VodPlayerScreen(
                         viewModel.seekBy(SEEK_LONG_MS)
                     }
 
-                    Key.DirectionUp, Key.DirectionDown, Key.Info -> {}
+                    // With the bar shown, Up / Down open the options (tracks, format, sleep timer).
+                    Key.DirectionUp, Key.DirectionDown, Key.Info -> {
+                        if (overlayVisible && event.key != Key.Info) optionsOpen = true
+                    }
+
+                    Key.Menu -> {
+                        optionsOpen = true
+                    }
 
                     else -> {
                         return@onKeyEvent false
@@ -148,12 +164,19 @@ fun VodPlayerScreen(
                 true
             }.focusRequester(focus)
             .focusable()
-            .pointerInput(Unit) { detectTapGestures { viewModel.togglePause() } },
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { viewModel.togglePause() }, onLongPress = { optionsOpen = true })
+            },
     ) {
-        viewModel.exoPlayer?.let { player ->
-            ContentFrame(player = player, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-        }
+        PlayerVideo(viewModel.exoPlayer, format, Modifier.fillMaxSize())
         StatusText(playback, ui.catchup, Modifier.align(Alignment.Center))
+        if (showStats) {
+            // Below the title of the controls.
+            StatsOverlay(
+                viewModel.exoPlayer,
+                Modifier.align(Alignment.TopEnd).padding(end = OntDimens.SafeHorizontal, top = 110.dp),
+            )
+        }
         AnimatedVisibility(
             visible = overlayVisible,
             enter = fadeIn(),
@@ -162,6 +185,15 @@ fun VodPlayerScreen(
         ) {
             Overlay(ui, position, duration, paused)
         }
+    }
+    if (optionsOpen) {
+        PlayerOptionsMenu(
+            live = false,
+            onDismiss = {
+                optionsOpen = false
+                runCatching { focus.requestFocus() }
+            },
+        )
     }
 }
 

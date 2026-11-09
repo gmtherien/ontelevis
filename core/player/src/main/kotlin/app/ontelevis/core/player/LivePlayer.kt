@@ -69,6 +69,9 @@ class LivePlayer
             if (current != null) previous = current
             policy.reset()
             asHls = channel.streamUrl.isHlsUrl()
+            // The player exists before the state names the channel: state watchers (track choices)
+            // find it there.
+            ensurePlayer()
             _state.value = LiveState(channel = channel, status = LiveState.Status.BUFFERING)
             open(channel)
         }
@@ -124,11 +127,7 @@ class LivePlayer
         private fun open(channel: Channel) {
             openedAt = SystemClock.elapsedRealtime()
             handler.removeCallbacksAndMessages(null)
-            val player =
-                exo ?: factory.create(live = true).also { created ->
-                    created.addListener(listener)
-                    exo = created
-                }
+            val player = ensurePlayer()
             val item =
                 MediaItem
                     .Builder()
@@ -144,6 +143,12 @@ class LivePlayer
             player.prepare()
             player.playWhenReady = true
         }
+
+        private fun ensurePlayer(): ExoPlayer =
+            exo ?: factory.create(live = true).also { created ->
+                created.addListener(listener)
+                exo = created
+            }
 
         private fun apply(action: RecoveryAction) {
             val channel = _state.value.channel ?: return

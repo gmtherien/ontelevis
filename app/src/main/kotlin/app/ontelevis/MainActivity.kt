@@ -15,6 +15,7 @@ import app.ontelevis.core.designsystem.theme.OntelevisPhoneTheme
 import app.ontelevis.core.designsystem.theme.OntelevisTheme
 import app.ontelevis.core.player.LivePlayer
 import app.ontelevis.core.player.VodPlayer
+import app.ontelevis.core.playerui.PlaybackOptions
 import app.ontelevis.navigation.PhoneApp
 import app.ontelevis.navigation.TvApp
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,8 +37,12 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var parental: ParentalControl
 
+    // Tracks and picture format remembered per channel / title, applied as each one starts.
+    @Inject lateinit var playbackOptions: PlaybackOptions
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        playbackOptions.start()
         // Off the main thread: WorkManager's first use opens its database.
         lifecycleScope.launch(Dispatchers.IO) { PlaylistSync.schedule(applicationContext) }
         val tv = isTelevision()

@@ -18,6 +18,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,9 @@ import app.ontelevis.core.designsystem.theme.OntTheme
 import app.ontelevis.core.model.Programme
 import app.ontelevis.core.model.parseChannelName
 import app.ontelevis.core.player.LiveState
+import app.ontelevis.core.playerui.PlayerOptionsMenu
+import app.ontelevis.core.playerui.PlayerOptionsViewModel
+import app.ontelevis.core.playerui.StatsOverlay
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
@@ -60,9 +64,13 @@ import java.time.ZoneId
 fun PlayerScreen(
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
+    options: PlayerOptionsViewModel = hiltViewModel(),
 ) {
     val live by viewModel.live.collectAsStateWithLifecycle()
     val programmes by viewModel.programmes.collectAsStateWithLifecycle()
+    val showStats by options.options.settings.showStats
+        .collectAsStateWithLifecycle()
+    var optionsOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     // Each change restarts the 3 s countdown of the info bar.
     var overlayTick by remember { mutableIntStateOf(1) }
@@ -108,7 +116,18 @@ fun PlayerScreen(
                     }
 
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                        if (live.status == LiveState.Status.ERROR) viewModel.retry() else showOverlay()
+                        when {
+                            live.status == LiveState.Status.ERROR -> viewModel.retry()
+
+                            // OK on the info bar: the options (tracks, format, sleep timer).
+                            overlayVisible -> optionsOpen = true
+
+                            else -> showOverlay()
+                        }
+                    }
+
+                    Key.Menu -> {
+                        optionsOpen = true
                     }
 
                     Key.DirectionLeft, Key.DirectionRight, Key.Info -> {
@@ -122,10 +141,18 @@ fun PlayerScreen(
                 true
             }.focusRequester(focus)
             .focusable()
-            .pointerInput(Unit) { detectTapGestures { showOverlay() } },
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { showOverlay() }, onLongPress = { optionsOpen = true })
+            },
     ) {
         LiveVideo(viewModel.player, Modifier.fillMaxSize())
         LiveStatusOverlay(live)
+        if (showStats) {
+            StatsOverlay(
+                viewModel.player,
+                Modifier.align(Alignment.TopEnd).padding(OntDimens.SafeVertical),
+            )
+        }
         AnimatedVisibility(
             visible = overlayVisible && live.channel != null,
             enter = fadeIn(),
@@ -134,6 +161,15 @@ fun PlayerScreen(
         ) {
             InfoBar(live, programmes)
         }
+    }
+    if (optionsOpen) {
+        PlayerOptionsMenu(
+            live = true,
+            onDismiss = {
+                optionsOpen = false
+                runCatching { focus.requestFocus() }
+            },
+        )
     }
 }
 

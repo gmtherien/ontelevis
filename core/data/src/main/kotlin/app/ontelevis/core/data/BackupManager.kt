@@ -63,6 +63,7 @@ class BackupManager
         private val parental: ParentalControl,
         private val vodPrefs: VodPrefs,
         private val language: LanguageSettings,
+        private val playerSettings: PlayerSettings,
     ) {
         private val json = Json { prettyPrint = true }
 
@@ -147,6 +148,7 @@ class BackupManager
                         )
                     }
                     put("sorts", JsonObject(vodPrefs.allSorts().mapValues { JsonPrimitive(it.value) }))
+                    put("player", JsonObject(playerSettings.all().mapValues { JsonPrimitive(it.value) }))
                     put("language", language.current())
                 }
             return json.encodeToString(JsonElement.serializer(), root)
@@ -240,6 +242,14 @@ class BackupManager
                     ?.toMap()
                     .orEmpty(),
             )
+            (root["player"] as? JsonObject)?.let { player ->
+                playerSettings.restore(
+                    player
+                        .mapNotNull { (k, v) ->
+                            v.jsonPrimitive.contentOrNull?.let { k to it }
+                        }.toMap(),
+                )
+            }
             // Channels, titles and guide come back from the providers.
             PlaylistSync.refreshNow(context)
             val tag = root.string("language")

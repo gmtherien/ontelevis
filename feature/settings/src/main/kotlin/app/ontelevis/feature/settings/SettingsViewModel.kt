@@ -10,6 +10,7 @@ import app.ontelevis.core.data.BackupManager
 import app.ontelevis.core.data.BackupSummary
 import app.ontelevis.core.data.LanguageSettings
 import app.ontelevis.core.data.ParentalControl
+import app.ontelevis.core.data.PlayerSettings
 import app.ontelevis.core.data.PlaylistRepository
 import app.ontelevis.core.data.sync.PlaylistSync
 import app.ontelevis.core.model.Playlist
@@ -53,6 +54,7 @@ class SettingsViewModel
         private val backups: BackupManager,
         val backupFiles: BackupFiles,
         val updates: UpdateCenter,
+        val player: PlayerSettings,
     ) : ViewModel() {
         /** A backup read and waiting for the user's confirmation. */
         data class PendingRestore(

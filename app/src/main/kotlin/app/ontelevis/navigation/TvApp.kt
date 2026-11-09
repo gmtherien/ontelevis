@@ -31,6 +31,7 @@ import app.ontelevis.core.data.sync.PlaylistSync
 import app.ontelevis.core.designsystem.component.OntNavRailScaffold
 import app.ontelevis.core.designsystem.component.OntRailItem
 import app.ontelevis.core.model.VodKind
+import app.ontelevis.core.playerui.SleepTimerHost
 import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
 import app.ontelevis.feature.settings.AccountWarning
@@ -201,6 +202,8 @@ fun TvApp() {
     }
     // Subscription about to expire: once a day, as a short message.
     AccountWarning()
+    // Sleep timer ran out: "Still watching?", then playback stops and the app leaves the players.
+    SleepTimerHost(onStopped = { navController.goTo(LiveRoute) })
     // New version on GitHub: asked at each start, never over a full-screen player.
     UpdatePrompt(allowed = destination != null && !destination.isPlayer())
 }

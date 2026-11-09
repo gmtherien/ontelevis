@@ -14,7 +14,7 @@
     <string name="live_continuous">Diffusion continue</string>
     <string name="live_continuous_title">Diffusion continue.</string>
     <string name="live_continuous_body">Cette chaîne ne fournit pas de grille horaire, le flux joue en boucle.</string>
-    <string name="live_zap_hint">▲ ▼ changer de chaîne</string>
+    <string name="live_zap_hint">▲ ▼ changer de chaîne · OK options</string>
     <string name="live_error_not_found">Cette chaîne n\'existe plus sur le serveur.</string>
     <string name="live_error_unsupported">Le format de ce flux ne peut pas être lu.</string>
     <string name="live_error_unreachable">Le flux ne répond pas. Appuyez sur OK pour réessayer.</string>
