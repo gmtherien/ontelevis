@@ -34,7 +34,7 @@ data class VodCategoryEntity(
 @Entity(
     tableName = "movie",
     foreignKeys = [ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE)],
-    indices = [Index("playlistId", "groupName", "sortOrder")],
+    indices = [Index("playlistId", "groupName", "sortOrder"), Index("added")],
 )
 data class MovieEntity(
     /** `playlistId::rawId`. */
@@ -56,7 +56,7 @@ data class MovieEntity(
 @Entity(
     tableName = "series",
     foreignKeys = [ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE)],
-    indices = [Index("playlistId", "groupName", "sortOrder")],
+    indices = [Index("playlistId", "groupName", "sortOrder"), Index("lastModified")],
 )
 data class SeriesEntity(
     /** `playlistId::rawId`. */
@@ -74,6 +74,8 @@ data class SeriesEntity(
     val sortOrder: Int,
     /** [searchKeyOf] the name; empty for rows imported before search existed (until the next refresh). */
     @ColumnInfo(defaultValue = "") val searchKey: String = "",
+    /** Xtream `last_modified` (epoch seconds), 0 when unknown: "recently added" on the Home screen. */
+    @ColumnInfo(defaultValue = "0") val lastModified: Long = 0,
 )
 
 @Entity(

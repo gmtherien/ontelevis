@@ -21,6 +21,27 @@ class XtreamJsonTest {
     }
 
     @Test
+    fun `account connections, trial and expiry`() {
+        val reply =
+            """{"user_info":{"auth":1,"exp_date":1767225600,"max_connections":"3","active_cons":"1","is_trial":"0"}}"""
+
+        val info = XtreamJson.decodeAccount(reply.stream()).userInfo!!
+
+        assertEquals(3, info.maxConnections)
+        assertEquals(1, info.activeConnections)
+        assertEquals(0, info.isTrial)
+        assertEquals(1_767_225_600_000L, info.expiresAtMillis)
+    }
+
+    @Test
+    fun `account without expiry`() {
+        listOf("null", "\"\"", "\"0\"").forEach { exp ->
+            val info = XtreamJson.decodeAccount("""{"user_info":{"auth":1,"exp_date":$exp}}""".stream()).userInfo!!
+            assertNull(info.expiresAtMillis, exp)
+        }
+    }
+
+    @Test
     fun `failed login has auth 0`() {
         val info = XtreamJson.decodeAccount("""{"user_info":{"auth":0}}""".stream()).userInfo!!
         assertEquals(0, info.auth)

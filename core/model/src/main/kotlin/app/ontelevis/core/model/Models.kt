@@ -32,7 +32,39 @@ data class Playlist(
     val seriesCount: Int = 0,
     /** Epoch millis movies and series were last loaded, null if never (still loading). */
     val lastVodAt: Long? = null,
+    /** Xtream account, null for M3U or before the first check. */
+    val account: XtreamAccount? = null,
 )
+
+/** What an Xtream panel says about the subscription (`user_info`). */
+data class XtreamAccount(
+    /** Epoch millis, null when the account never expires. */
+    val expiresAt: Long?,
+    val maxConnections: Int,
+    val activeConnections: Int,
+    /** "Active", "Expired", "Disabled", "Banned"... as the panel writes it; null if unknown. */
+    val status: String?,
+    val isTrial: Boolean,
+) {
+    val isActive: Boolean get() = status == null || status.equals("Active", ignoreCase = true)
+
+    /** Whole days until expiry (0 on the last day, negative once expired), null when it never expires. */
+    fun daysLeft(now: Long): Long? =
+        expiresAt?.let {
+            Math.floorDiv(
+                it - now,
+                java.util.concurrent.TimeUnit.DAYS
+                    .toMillis(1),
+            )
+        }
+
+    /** True when the user should be warned: expired, not active, or [WARN_DAYS] days or fewer left. */
+    fun needsWarning(now: Long): Boolean = !isActive || (daysLeft(now)?.let { it <= WARN_DAYS } ?: false)
+
+    companion object {
+        const val WARN_DAYS = 7L
+    }
+}
 
 /** Reasons a playlist refresh can fail, shown to the user in plain words. */
 enum class RefreshError {

@@ -86,4 +86,21 @@
         <item quantity="one">%d series</item>
         <item quantity="other">%d series</item>
     </plurals>
+    <!-- Xtream account -->
+    <string name="settings_account_expires">Expires %1$s</string>
+    <string name="settings_account_never">No expiry date</string>
+    <string name="settings_account_expired">Subscription expired</string>
+    <string name="settings_account_status">Account: %1$s</string>
+    <string name="settings_account_connections">%1$d/%2$d connections</string>
+    <string name="settings_account_trial">Trial</string>
+    <plurals name="settings_account_days_left">
+        <item quantity="one">%d day left</item>
+        <item quantity="other">%d days left</item>
+    </plurals>
+    <string name="account_warning_expires">Your “%1$s” subscription expires today.</string>
+    <string name="account_warning_expired">Your “%1$s” subscription has expired or is no longer active.</string>
+    <plurals name="account_warning_days">
+        <item quantity="one">Your “%1$s” subscription expires in %2$d day.</item>
+        <item quantity="other">Your “%1$s” subscription expires in %2$d days.</item>
+    </plurals>
 </resources>

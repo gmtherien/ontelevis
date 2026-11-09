@@ -216,7 +216,7 @@ private val VodKind.key: String get() = if (this == VodKind.MOVIE) VOD_MOVIE els
 const val SEARCH_LIMIT = 500
 
 /** `%text%` for LIKE, with LIKE's own wildcards in the text escaped. */
-private fun likePattern(text: String): String =
+internal fun likePattern(text: String): String =
     "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 private fun MovieEntity.toModel() = Movie(id, playlistId, name, groupName, streamUrl, posterUrl, rating, year)

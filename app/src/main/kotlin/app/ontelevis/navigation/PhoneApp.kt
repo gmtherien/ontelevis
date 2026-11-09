@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.ontelevis.feature.live.LiveScreen
 import app.ontelevis.feature.live.PlayerScreen
+import app.ontelevis.feature.settings.AccountWarning
 import app.ontelevis.feature.settings.AddPlaylistScreen
 import app.ontelevis.feature.settings.SettingsScreen
 import app.ontelevis.feature.settings.UpdatePrompt
@@ -85,6 +86,8 @@ fun PhoneApp() {
             composable<AddPlaylistRoute> { AddPlaylistScreen(onDone = { navController.goTo(LiveRoute) }) }
         }
     }
+    // Subscription about to expire: once a day, as a short message.
+    AccountWarning()
     // New version on GitHub: asked at each start, never over a full-screen player.
     UpdatePrompt(
         allowed =

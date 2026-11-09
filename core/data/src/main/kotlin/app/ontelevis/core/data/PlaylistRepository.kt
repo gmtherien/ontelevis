@@ -12,6 +12,7 @@ import app.ontelevis.core.data.importer.VodImporter
 import app.ontelevis.core.model.Playlist
 import app.ontelevis.core.model.PlaylistSource
 import app.ontelevis.core.model.RefreshError
+import app.ontelevis.core.model.XtreamAccount
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -38,6 +39,9 @@ interface PlaylistRepository {
 
     /** Refreshes channels, movies and series, then guide of every enabled playlist. Returns how many failed. */
     suspend fun refreshAll(): Int
+
+    /** Reads expiry and connections of the Xtream playlists not checked within [maxAgeMillis]. */
+    suspend fun checkAccounts(maxAgeMillis: Long)
 }
 
 @Singleton
@@ -107,6 +111,14 @@ internal class RoomPlaylistRepository
             }
         }
 
+        override suspend fun checkAccounts(maxAgeMillis: Long) {
+            val now = System.currentTimeMillis()
+            dao
+                .enabled()
+                .filter { it.kind == KIND_XTREAM && (it.accountCheckedAt ?: 0) < now - maxAgeMillis }
+                .forEach { importer.checkAccount(it) }
+        }
+
         override suspend fun refreshAll(): Int =
             dao.enabled().count { playlist ->
                 val channelsFailed = refresh(playlist.id) != null
@@ -136,6 +148,12 @@ private fun PlaylistEntity.toModel(): Playlist {
         movieCount = movieCount,
         seriesCount = seriesCount,
         lastVodAt = lastVodAt,
+        account =
+            if (kind == KIND_XTREAM && accountCheckedAt != null) {
+                XtreamAccount(expiresAt, maxConnections, activeConnections, accountStatus, isTrial)
+            } else {
+                null
+            },
     )
 }
 

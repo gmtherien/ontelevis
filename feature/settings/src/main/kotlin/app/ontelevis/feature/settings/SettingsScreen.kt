@@ -537,6 +537,16 @@ private fun PlaylistRow(
                     color = if (error != null && !refreshing) c.live else c.textMuted,
                     maxLines = 2,
                 )
+                playlist.account?.let { account ->
+                    val (line, warn) = accountLine(account)
+                    Text(
+                        line,
+                        style = OntTheme.type.meta,
+                        color = if (warn) c.live else c.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             OntIconButton(onClick = onRefresh) {
                 Icon(

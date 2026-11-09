@@ -14,6 +14,8 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.migration.AutoMigrationSpec
 import androidx.sqlite.db.SupportSQLiteDatabase
+import app.ontelevis.core.model.parseChannelName
+import app.ontelevis.core.model.searchKeyOf
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "playlist")
@@ -44,6 +46,17 @@ data class PlaylistEntity(
     val lastVodAt: Long? = null,
     /** Xtream panel time zone (`server_info.timezone`), for catch-up start times. */
     val serverTimezone: String? = null,
+    /**
+     * Xtream account (`user_info`), read at each refresh and at most every few hours at start.
+     * Expiry in epoch milliseconds; null when the account never expires (or for M3U).
+     */
+    val expiresAt: Long? = null,
+    @ColumnInfo(defaultValue = "0") val maxConnections: Int = 0,
+    @ColumnInfo(defaultValue = "0") val activeConnections: Int = 0,
+    /** `user_info.status` ("Active", "Expired", "Disabled", ...). */
+    val accountStatus: String? = null,
+    @ColumnInfo(defaultValue = "0") val isTrial: Boolean = false,
+    val accountCheckedAt: Long? = null,
 )
 
 @Entity(
@@ -82,6 +95,8 @@ data class ChannelEntity(
     val epgId: String?,
     val catchupDays: Int,
     val sortOrder: Int,
+    /** [searchKeyOf] the cleaned title (no group prefix or quality tags), for voice search. */
+    @ColumnInfo(defaultValue = "") val searchKey: String = "",
 )
 
 /** Row of the categories query: a group and how many channels it holds. */
@@ -123,6 +138,21 @@ interface PlaylistDao {
     fun setServerTimezone(
         id: Long,
         timezone: String?,
+    )
+
+    @Query(
+        "UPDATE playlist SET expiresAt = :expiresAt, maxConnections = :maxConnections, " +
+            "activeConnections = :activeConnections, accountStatus = :status, isTrial = :isTrial, " +
+            "accountCheckedAt = :at WHERE id = :id",
+    )
+    fun setAccountInfo(
+        id: Long,
+        expiresAt: Long?,
+        maxConnections: Int,
+        activeConnections: Int,
+        status: String?,
+        isTrial: Boolean,
+        at: Long,
     )
 
     @Query("UPDATE playlist SET detectedEpgUrl = :url WHERE id = :id")
@@ -180,6 +210,19 @@ interface ChannelDao {
 
     @Query("SELECT * FROM channel WHERE id = :id")
     suspend fun get(id: String): ChannelEntity?
+
+    /** Channels of enabled playlists whose cleaned title contains [like] (a LIKE pattern). */
+    @Query(
+        """
+        SELECT c.* FROM channel c JOIN playlist p ON p.id = c.playlistId
+        WHERE p.enabled = 1 AND c.searchKey LIKE :like ESCAPE '\'
+        LIMIT :limit
+        """,
+    )
+    suspend fun search(
+        like: String,
+        limit: Int,
+    ): List<ChannelEntity>
 
     /** Longest catch-up of the playlist's channels, in days (the guide keeps that much past). */
     @Query("SELECT COALESCE(MAX(catchupDays), 0) FROM channel WHERE playlistId = :playlistId")
@@ -250,8 +293,10 @@ interface ChannelGroupDao {
         GroupPrefEntity::class,
         VodFavoriteEntity::class,
         CategoryLockEntity::class,
+        PlaybackPrefEntity::class,
+        ReminderEntity::class,
     ],
-    version = 9,
+    version = 10,
     // From version 3 on, schema changes keep the user's data (no more wipe).
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
@@ -261,6 +306,7 @@ interface ChannelGroupDao {
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9, spec = Migration8To9::class),
+        AutoMigration(from = 9, to = 10, spec = Migration9To10::class),
     ],
     exportSchema = true,
 )
@@ -276,6 +322,10 @@ abstract class OntelevisDatabase : RoomDatabase() {
     abstract fun vodDao(): VodDao
 
     abstract fun libraryDao(): LibraryDao
+
+    abstract fun playbackPrefDao(): PlaybackPrefDao
+
+    abstract fun reminderDao(): ReminderDao
 }
 
 /** Version 9 stores category counts: fill them once from the existing rows. */
@@ -294,3 +344,25 @@ class Migration8To9 : AutoMigrationSpec {
         )
     }
 }
+
+/** Version 10 adds the channels' search key: fill it once for the channels already imported. */
+class Migration9To10 : AutoMigrationSpec {
+    override fun onPostMigrate(db: SupportSQLiteDatabase) {
+        val keys = ArrayList<Pair<String, String>>()
+        db.query("SELECT id, name FROM channel").use { cursor ->
+            while (cursor.moveToNext()) {
+                keys += cursor.getString(0) to channelSearchKey(cursor.getString(1))
+            }
+        }
+        val update = db.compileStatement("UPDATE channel SET searchKey = ? WHERE id = ?")
+        keys.forEach { (id, key) ->
+            update.bindString(1, key)
+            update.bindString(2, id)
+            update.executeUpdateDelete()
+            update.clearBindings()
+        }
+    }
+}
+
+/** What voice search compares with: "FR | RDS HD" -> "rds". */
+fun channelSearchKey(name: String): String = searchKeyOf(parseChannelName(name).title)

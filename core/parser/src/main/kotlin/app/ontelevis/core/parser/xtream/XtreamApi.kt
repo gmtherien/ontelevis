@@ -36,7 +36,18 @@ data class XtreamUserInfo(
     @Serializable(FlexibleString::class) val status: String? = null,
     @SerialName("exp_date") @Serializable(FlexibleString::class) val expDate: String? = null,
     @SerialName("max_connections") @Serializable(FlexibleInt::class) val maxConnections: Int = 0,
-)
+    @SerialName("active_cons") @Serializable(FlexibleInt::class) val activeConnections: Int = 0,
+    @SerialName("is_trial") @Serializable(FlexibleInt::class) val isTrial: Int = 0,
+) {
+    /** Expiry as epoch milliseconds, or null when the account never expires (`exp_date` empty, 0 or null). */
+    val expiresAtMillis: Long?
+        get() =
+            expDate
+                ?.toDoubleOrNull()
+                ?.toLong()
+                ?.takeIf { it > 0 }
+                ?.let { it * 1000 }
+}
 
 @Serializable
 data class XtreamCategory(

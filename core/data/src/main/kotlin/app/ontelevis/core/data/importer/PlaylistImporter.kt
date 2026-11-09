@@ -8,6 +8,7 @@ import app.ontelevis.core.data.db.OntelevisDatabase
 import app.ontelevis.core.data.db.PlaylistDao
 import app.ontelevis.core.data.db.PlaylistEntity
 import app.ontelevis.core.data.db.VodDao
+import app.ontelevis.core.data.db.channelSearchKey
 import app.ontelevis.core.data.network.HttpSource
 import app.ontelevis.core.data.network.HttpStatusException
 import app.ontelevis.core.model.RefreshError
@@ -16,6 +17,7 @@ import app.ontelevis.core.parser.ImportedChannel
 import app.ontelevis.core.parser.M3uClassifier
 import app.ontelevis.core.parser.M3uKind
 import app.ontelevis.core.parser.m3u.M3uParser
+import app.ontelevis.core.parser.xtream.XtreamAccountResponse
 import app.ontelevis.core.parser.xtream.XtreamJson
 import app.ontelevis.core.parser.xtream.XtreamUrls
 import kotlinx.coroutines.CancellationException
@@ -116,6 +118,7 @@ class PlaylistImporter
         private fun importXtream(playlist: PlaylistEntity): Int {
             val urls = XtreamUrls(playlist.url, playlist.username.orEmpty(), playlist.password.orEmpty())
             val account = http.open(urls.playerApi()) { XtreamJson.decodeAccount(it) }
+            saveAccount(playlist.id, account)
             if (account.userInfo?.auth != 1) throw RefreshException(RefreshError.AUTH)
             playlistDao.setServerTimezone(playlist.id, account.serverInfo?.timezone)
             val categories = http.open(urls.playerApi("get_live_categories")) { XtreamJson.decodeCategories(it) }
@@ -127,6 +130,35 @@ class PlaylistImporter
                     providerGroupOrder = categories.mapNotNull { it.categoryName },
                 )
             }
+        }
+
+        /**
+         * Reads only the Xtream account (expiry, connections, status), without importing anything.
+         * False when the server cannot be reached; a failed login is saved like any other answer.
+         */
+        suspend fun checkAccount(playlist: PlaylistEntity): Boolean =
+            withContext(Dispatchers.IO) {
+                if (playlist.kind != KIND_XTREAM) return@withContext false
+                val urls = XtreamUrls(playlist.url, playlist.username.orEmpty(), playlist.password.orEmpty())
+                runCatching { http.open(urls.playerApi()) { XtreamJson.decodeAccount(it) } }
+                    .onSuccess { saveAccount(playlist.id, it) }
+                    .isSuccess
+            }
+
+        private fun saveAccount(
+            playlistId: Long,
+            account: XtreamAccountResponse,
+        ) {
+            val info = account.userInfo
+            playlistDao.setAccountInfo(
+                id = playlistId,
+                expiresAt = info?.expiresAtMillis,
+                maxConnections = info?.maxConnections ?: 0,
+                activeConnections = info?.activeConnections ?: 0,
+                status = info?.status ?: if (info?.auth == 1) null else "Disabled",
+                isTrial = info?.isTrial == 1,
+                at = System.currentTimeMillis(),
+            )
         }
 
         private fun replaceChannels(
@@ -191,6 +223,7 @@ class PlaylistImporter
             epgId = epgId,
             catchupDays = catchupDays,
             sortOrder = sortOrder,
+            searchKey = channelSearchKey(name),
         )
 
         companion object {

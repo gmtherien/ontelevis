@@ -90,4 +90,23 @@
         <item quantity="many">%d séries</item>
         <item quantity="other">%d séries</item>
     </plurals>
+    <!-- Compte Xtream -->
+    <string name="settings_account_expires">Expire le %1$s</string>
+    <string name="settings_account_never">Sans date d’expiration</string>
+    <string name="settings_account_expired">Abonnement expiré</string>
+    <string name="settings_account_status">Compte : %1$s</string>
+    <string name="settings_account_connections">%1$d/%2$d connexions</string>
+    <string name="settings_account_trial">Essai</string>
+    <plurals name="settings_account_days_left">
+        <item quantity="one">%d jour restant</item>
+        <item quantity="many">%d jours restants</item>
+        <item quantity="other">%d jours restants</item>
+    </plurals>
+    <string name="account_warning_expires">Votre abonnement « %1$s » expire aujourd’hui.</string>
+    <string name="account_warning_expired">Votre abonnement « %1$s » a expiré ou n’est plus actif.</string>
+    <plurals name="account_warning_days">
+        <item quantity="one">Votre abonnement « %1$s » expire dans %2$d jour.</item>
+        <item quantity="many">Votre abonnement « %1$s » expire dans %2$d jours.</item>
+        <item quantity="other">Votre abonnement « %1$s » expire dans %2$d jours.</item>
+    </plurals>
 </resources>
